@@ -22,10 +22,13 @@
     padding:calc(8px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));
     pointer-events:none; z-index:5;
   }
-  .hud .left { pointer-events:none; }
   h1 { font-size:19px; letter-spacing:2px; color:#ffd7ec; text-shadow:0 0 14px rgba(255,46,136,.55); }
   .sub { font-size:12px; color:#9fd8e8; letter-spacing:1px; margin-top:2px; }
-  #stats { font-size:12.5px; color:#cfe9f5; margin-top:4px; letter-spacing:.5px; }
+  #life { font-size:14px; color:#fff; margin-top:5px; letter-spacing:.5px; display:flex; align-items:center; gap:8px; }
+  #ebar { width:92px; height:8px; border:1px solid rgba(190,240,255,.55); border-radius:99px; overflow:hidden; background:rgba(8,16,30,.6); }
+  #efill { height:100%; width:100%; background:linear-gradient(90deg,#39d5ee,#8ff5c8); }
+  #efill.low { background:linear-gradient(90deg,#ff9d5c,#ff5f7a); }
+  #stats { font-size:12px; color:#a9cede; margin-top:3px; letter-spacing:.5px; }
   .hud .btns { display:flex; gap:8px; pointer-events:auto; }
   button {
     font-family:inherit; cursor:pointer; color:#e8f4ff; background:rgba(10,22,40,.72);
@@ -37,6 +40,12 @@
     position:fixed; top:calc(64px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
     color:#ff7ab0; font-weight:700; letter-spacing:.5px; font-size:11px; z-index:5; white-space:nowrap;
     border:1px solid rgba(255,46,136,.55); background:rgba(20,6,18,.66); padding:2px 10px; border-radius:999px;
+  }
+  #toast {
+    position:fixed; top:calc(94px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    z-index:9; font-size:14.5px; color:#eafcff; background:rgba(8,18,34,.88); border:1px solid rgba(126,231,255,.5);
+    padding:8px 18px; border-radius:999px; opacity:0; transition:opacity .35s; pointer-events:none; white-space:nowrap;
+    max-width:92vw; text-overflow:ellipsis; overflow:hidden;
   }
   #controls {
     position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:space-between; align-items:flex-end;
@@ -69,8 +78,27 @@
     background:linear-gradient(160deg,#8ff5ff,#38b6d9); border:none; box-shadow:0 0 22px rgba(126,231,255,.45);
   }
   #moment { display:none; }
-  #moment .card { background:rgba(8,16,30,.82); border:1px solid rgba(126,231,255,.35); border-radius:16px; padding:26px 28px; backdrop-filter:blur(6px); }
+  #moment .card, #sheet .card { background:rgba(8,16,30,.88); border:1px solid rgba(126,231,255,.35); border-radius:16px; padding:26px 28px; backdrop-filter:blur(6px); }
   #moment h2 { font-size:21px; letter-spacing:2px; }
+  #sheet { display:none; }
+  #sheet h2 { font-size:21px; letter-spacing:2px; }
+  #sheet .rows { text-align:left; font-size:15px; line-height:1.9; color:#d7ecf7; margin:8px 0 4px; }
+  #sheet .rows b { color:#8ff5ff; font-weight:700; }
+  #menu { display:none; align-items:flex-end; justify-content:center; background:rgba(3,6,12,.45); padding:0; }
+  #menuCard {
+    width:min(680px, 96vw); background:rgba(8,16,30,.94); border:1px solid rgba(126,231,255,.4);
+    border-bottom:none; border-radius:18px 18px 0 0; padding:16px 16px calc(14px + env(safe-area-inset-bottom));
+    max-height:82dvh; overflow-y:auto; text-align:left;
+  }
+  #menuCard h2 { font-size:18px; letter-spacing:2px; color:#ffd7ec; margin:2px 4px 10px; text-shadow:0 0 12px rgba(255,46,136,.5); }
+  .opt {
+    display:block; width:100%; text-align:left; border-radius:12px; padding:10px 14px; margin-bottom:8px;
+    background:rgba(18,34,58,.85); border:1px solid rgba(126,231,255,.35); color:#eafcff;
+  }
+  .opt .lab { font-size:16px; display:block; }
+  .opt .meta { font-size:12.5px; color:#9fd8e8; display:block; margin-top:2px; letter-spacing:.3px; }
+  .opt.off { opacity:.45; }
+  .opt.exit { background:rgba(40,16,34,.9); border-color:rgba(255,126,190,.5); text-align:center; }
   #rotate { display:none; z-index:20; }
   @media (orientation: portrait) { #rotate { display:flex; } }
 </style>
@@ -82,14 +110,17 @@
   <div class="left">
     <h1>TOKYO STROLL</h1>
     <div class="sub">NEON RAIN · ONE QUIET STREET</div>
+    <div id="life"><span id="lifetext">Day 1 · 07:00 · ¥3,000</span><span id="ebar"><span id="efill" style="display:block"></span></span><span id="eText" style="font-size:12px;color:#a9cede">Energy 100</span></div>
     <div id="stats">Moments 0/4 · 0 m walked</div>
   </div>
   <div class="btns">
+    <button id="youBtn">You</button>
     <button id="motionBtn">Motion: Full</button>
     <button id="soundBtn">Sound: On</button>
   </div>
 </div>
-<div id="pilot">TOKYO STROLL PILOT v1 · walking sim test · not on the link page</div>
+<div id="pilot">TOKYO STROLL PILOT v2.0 · life update test · not on the link page</div>
+<div id="toast"></div>
 
 <div id="controls">
   <div class="hold" id="leftBtn">◀</div>
@@ -100,10 +131,10 @@
 <div class="overlay" id="startScr">
   <div class="card">
     <h2>TOKYO STROLL</h2>
-    <p>A quiet walk down one rainy Tokyo street. No score to chase, nothing to dodge. Hold the arrows to stroll, and stop where the light pulls you in.</p>
-    <p class="small">Four little moments are hidden along the street. Find them all, or just walk.</p>
-    <button class="big" id="startBtn">Start strolling</button>
-    <p class="small" style="margin-top:12px">Best held sideways · headphones nice, not needed</p>
+    <p>You are broke in Tokyo: ¥3,000, a tiny apartment at the end of one rainy street, and a life to build on it. Work the café, study at the bookshop, eat when you can, sleep at home.</p>
+    <p class="small">Hold the arrows to walk. Stop at a glowing marker and tap Look to step inside. The clock only moves when you do something. Rent arrives with the next update; this build is the loop itself.</p>
+    <button class="big" id="startBtn">Start day one</button>
+    <p class="small" style="margin-top:12px">Best held sideways · your life saves as you go</p>
   </div>
 </div>
 
@@ -111,7 +142,22 @@
   <div class="card">
     <h2 id="momentTitle"></h2>
     <p id="momentText"></p>
-    <button class="big" id="momentBtn">Keep walking</button>
+    <button class="big" id="momentBtn">Step inside</button>
+  </div>
+</div>
+
+<div class="overlay" id="menu">
+  <div id="menuCard">
+    <h2 id="menuTitle"></h2>
+    <div id="menuOpts"></div>
+  </div>
+</div>
+
+<div class="overlay" id="sheet">
+  <div class="card">
+    <h2>YOU, SO FAR</h2>
+    <div class="rows" id="sheetRows"></div>
+    <button class="big" id="sheetBtn">Back to the street</button>
   </div>
 </div>
 
@@ -128,6 +174,7 @@
   var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
   var statsEl = document.getElementById('stats');
   var lookBtn = document.getElementById('lookBtn');
+  var toastEl = document.getElementById('toast');
 
   function fit() {
     var s = Math.min(window.innerWidth / W, window.innerHeight / H);
@@ -145,24 +192,70 @@
   try { found = JSON.parse(load('ts-found', '[]')); } catch (e) { found = []; }
   var totalM = parseFloat(load('ts-total', '0')) || 0;
 
+  // ----- the life (ts-life, spec v2.0; lastRentDay reserved for v2.1) -----
+  var LIFE;
+  try { LIFE = JSON.parse(load('ts-life', 'null')); } catch (e) { LIFE = null; }
+  if (!LIFE || LIFE.v !== 1) LIFE = { v: 1, day: 1, clock: 420, yen: 3000, energy: 100, smarts: 8, presence: 6, fitness: 6, textbook: false, shifts: 0, walkAcc: 0, lastRentDay: 0 };
+  function saveLife() { save('ts-life', JSON.stringify(LIFE)); }
+
+  var TIERS = [
+    { name: 'Dishwasher', wage: 900, req: null, gain: { fitness: 1 }, gainText: '+1 Fitness' },
+    { name: 'Barista', wage: 1300, req: { presence: 15 }, gain: { presence: 1 }, gainText: '+1 Presence' },
+    { name: 'Shift Lead', wage: 1900, req: { presence: 30, smarts: 20 }, gain: { presence: 1, smarts: 1 }, gainText: '+1 Presence · +1 Smarts' }
+  ];
+  function reqMet(req) { if (!req) return true; for (var k in req) if (LIFE[k] < req[k]) return false; return true; }
+  function reqText(req) { var p = []; for (var k in req) p.push((k === 'presence' ? 'Presence ' : 'Smarts ') + req[k]); return p.join(' · '); }
+  function tierIdx() { var t = 0; for (var i = 0; i < TIERS.length; i++) if (reqMet(TIERS[i].req)) t = i; return t; }
+  function shiftCost() { return 35 - (LIFE.fitness >= 40 ? 9 : LIFE.fitness >= 20 ? 5 : 0); }
+  function fmtClock(m) { var h = Math.floor(m / 60), mm = m % 60; return (h < 10 ? '0' : '') + h + ':' + (mm < 10 ? '0' : '') + mm; }
+  function fmtYen(n) { return '¥' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
   // ----- the street plate -----
   var plate = new Image(), plateReady = false;
   plate.onload = function () { plateReady = true; };
   plate.src = 'tokyo-plate.webp';
-  var WORLD = 1260;                    // plate drawn at full height: 540 * (1920/823)
-  var GROUND = 456;                    // feet line on the painted sidewalk
+  var WORLD = 1260;
+  var GROUND = 456;
 
   var SPOTS = [
-    { f: 0.135, name: 'THE CAFÉ', color: '#ff5f9e', text: 'Rain ticks on the awning. Inside, the windows have fogged at the edges and somebody is in no hurry at all.' },
-    { f: 0.392, name: 'THE RAMEN SHOP', color: '#39d5ee', text: 'Every time the curtain lifts, steam rolls out into the rain. Garlic, ginger, and hot broth, right there on the sidewalk.' },
-    { f: 0.652, name: 'THE BOOKSHOP', color: '#ff5f9e', text: 'Open late, lit warm. Paper and wood and one small bonsai in the window, doing very well for itself.' },
-    { f: 0.885, name: 'THE VENDING MACHINES', color: '#39d5ee', text: 'They hum in pink and blue at the end of the street. Hot corn soup in a can. Somehow, tonight, that sounds perfect.' }
+    { id: 'cafe', f: 0.135, name: 'THE CAFÉ', color: '#ff5f9e', text: 'Rain ticks on the awning. Inside, the windows have fogged at the edges and somebody is in no hurry at all.' },
+    { id: 'ramen', f: 0.392, name: 'THE RAMEN SHOP', color: '#39d5ee', text: 'Every time the curtain lifts, steam rolls out into the rain. Garlic, ginger, and hot broth, right there on the sidewalk.' },
+    { id: 'books', f: 0.652, name: 'THE BOOKSHOP', color: '#ff5f9e', text: 'Open late, lit warm. Paper and wood and one small bonsai in the window, doing very well for itself.' },
+    { id: 'vending', f: 0.885, name: 'THE VENDING MACHINES', color: '#39d5ee', text: 'They hum in pink and blue at the end of the street. Hot corn soup in a can. Somehow, tonight, that sounds perfect.' }
   ];
+  var HOME = { id: 'home', name: 'HOME', x: 58, color: '#ffd76a' };
   SPOTS.forEach(function (s) { s.x = s.f * WORLD; s.done = found.indexOf(s.name) >= 0; });
+  var PLACES = SPOTS.concat([HOME]);
 
-  // ----- walker -----
+  // ----- actions (Rosa's tables; Charm ships as Presence) -----
+  function shiftAction() {
+    var t = TIERS[tierIdx()];
+    return { label: 'Work a shift — ' + t.name, kind: 'shift',
+      meta: '4 h · ' + fmtYen(t.wage * 4) + ' · −' + shiftCost() + ' Energy · ' + t.gainText + (LIFE.shifts >= 2 ? ' · roster full today' : ''),
+      can: function () { return LIFE.shifts < 2 ? '' : 'No more shifts today'; } };
+  }
+  var ACTIONS = {
+    cafe: [shiftAction,
+      { label: 'Chat with the regulars', kind: 'chat', yen: 0, mins: 60, dE: -5, gain: { presence: 1 }, meta: '1 h · free · −5 Energy · +1 Presence' },
+      { label: 'Coffee', kind: 'food', yen: 450, mins: 60, dE: 15, meta: '1 h · ¥450 · +15 Energy' },
+      { label: 'Cake set', kind: 'food', yen: 850, mins: 60, dE: 28, meta: '1 h · ¥850 · +28 Energy' }],
+    ramen: [
+      { label: 'Ramen bowl', kind: 'food', yen: 900, mins: 60, dE: 35, meta: '1 h · ¥900 · +35 Energy' },
+      { label: 'Deluxe ramen', kind: 'food', yen: 1600, mins: 60, dE: 60, meta: '1 h · ¥1,600 · +60 Energy' }],
+    books: [
+      { label: 'Study session', kind: 'study', yen: 500, mins: 120, dE: -15, meta: '2 h · ¥500 · −15 Energy · +3 Smarts' },
+      { label: 'Buy the good textbook', kind: 'buy', yen: 2500, mins: 0, dE: 0, meta: 'one-time · ¥2,500 · study becomes +4 Smarts' }],
+    vending: [
+      { label: 'Energy drink', kind: 'food', yen: 250, mins: 0, dE: 12, meta: 'instant · ¥250 · +12 Energy' },
+      { label: 'Snack bar', kind: 'food', yen: 150, mins: 0, dE: 6, meta: 'instant · ¥150 · +6 Energy' }],
+    home: [
+      { label: 'Sleep', kind: 'sleep', yen: 0, mins: 0, dE: 0, meta: 'ends the day · wake 07:00 · Energy full' }]
+  };
+
+  // ----- walker / run state -----
   var wx = 120, facing = 1, moving = 0, phase = 0, distM = 0;
-  var started = false, momentOpen = false;
+  var started = false, momentOpen = false, menuOpen = false, sheetOpen = false, pendingPlace = null;
+  function uiOpen() { return momentOpen || menuOpen || sheetOpen; }
 
   // ----- weather -----
   var drops = [], ripples = [], steam = [];
@@ -173,7 +266,7 @@
   }
   seedRain();
 
-  // ----- audio: soft rain noise + a two-note chime -----
+  // ----- audio -----
   var AC = null, rainGain = null;
   function audioInit() {
     if (AC) return;
@@ -199,6 +292,141 @@
     });
   }
 
+  // ----- toast + HUD -----
+  var toastTimer = null;
+  function toast(msg, ms) {
+    toastEl.textContent = msg; toastEl.style.opacity = '1';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.style.opacity = '0'; }, ms || 2800);
+  }
+  function updateHUD() {
+    document.getElementById('lifetext').textContent = 'Day ' + LIFE.day + ' · ' + fmtClock(LIFE.clock) + ' · ' + fmtYen(LIFE.yen);
+    var ef = document.getElementById('efill');
+    ef.style.width = LIFE.energy + '%';
+    ef.className = LIFE.energy <= 25 ? 'low' : '';
+    ef.id = 'efill';
+    document.getElementById('eText').textContent = 'Energy ' + LIFE.energy;
+    var foundCount = SPOTS.filter(function (s) { return s.done; }).length;
+    statsEl.textContent = 'Moments ' + foundCount + '/4 · ' + Math.round(distM) + ' m this walk · ' + Math.round(totalM) + ' m all time';
+  }
+
+  // ----- day rollover -----
+  function doRollover(late, msg) {
+    LIFE.day++; LIFE.clock = late ? 540 : 420; LIFE.energy = late ? 80 : 100; LIFE.shifts = 0;
+    saveLife(); updateHUD();
+    toast(msg || (late ? 'You trudge home through the rain. Tomorrow starts late.' : 'Day ' + LIFE.day + ' — morning, wet and quiet.'), 3600);
+  }
+
+  // ----- actions engine -----
+  function actionBlock(a) {
+    if (a.can) { var c = a.can(); if (c) return c; }
+    if (a.kind === 'buy' && LIFE.textbook) return 'Already on your shelf';
+    if (a.kind === 'food' && LIFE.energy > 85) return "You're full";
+    if (a.yen && LIFE.yen < a.yen) return 'Not enough ¥';
+    if (a.dE < 0 && LIFE.energy + a.dE < 0) return 'Too tired — eat, or head home';
+    return '';
+  }
+  function doAction(place, a) {
+    var block = actionBlock(a);
+    if (block) { toast(block); return; }
+    if (a.kind === 'sleep') { closeMenu(); doRollover(false); return; }
+    var beforeTier = tierIdx(), notes = [];
+    if (a.kind === 'shift') {
+      var t = TIERS[beforeTier];
+      LIFE.yen += t.wage * 4; LIFE.energy -= shiftCost(); LIFE.clock += 240; LIFE.shifts++;
+      for (var g in t.gain) { LIFE[g] += t.gain[g]; notes.push('+' + t.gain[g] + ' ' + g.charAt(0).toUpperCase() + g.slice(1)); }
+      notes.unshift('+' + fmtYen(t.wage * 4));
+    } else {
+      if (a.yen) LIFE.yen -= a.yen;
+      if (a.dE) LIFE.energy = Math.max(0, Math.min(100, LIFE.energy + a.dE));
+      if (a.mins) LIFE.clock += a.mins;
+      if (a.kind === 'study') { var gain = LIFE.textbook ? 4 : 3; LIFE.smarts += gain; notes.push('+' + gain + ' Smarts'); }
+      if (a.kind === 'chat') { LIFE.presence += 1; notes.push('+1 Presence'); }
+      if (a.kind === 'buy') { LIFE.textbook = true; notes.push('Textbook on the shelf'); }
+      if (a.kind === 'food') notes.push((a.dE > 0 ? '+' : '') + a.dE + ' Energy');
+    }
+    saveLife(); updateHUD();
+    var afterTier = tierIdx();
+    if (afterTier > beforeTier) { toast('Promoted — you are the café ' + TIERS[afterTier].name + ' now. ' + notes.join(' · '), 3600); chime(); }
+    else toast(notes.join(' · ') + ' · ' + fmtClock(LIFE.clock));
+    if (LIFE.energy <= 0 || LIFE.clock >= 1440) { closeMenu(); doRollover(true); return; }
+    renderMenu(place);
+  }
+
+  // ----- menus -----
+  var menuEl = document.getElementById('menu'), menuOpts = document.getElementById('menuOpts');
+  function renderMenu(place) {
+    document.getElementById('menuTitle').textContent = place.name;
+    menuOpts.innerHTML = '';
+    (ACTIONS[place.id] || []).forEach(function (raw) {
+      var a = (typeof raw === 'function') ? raw() : raw;
+      var b = document.createElement('button');
+      b.className = 'opt' + (actionBlock(a) ? ' off' : '');
+      var lab = document.createElement('span'); lab.className = 'lab'; lab.textContent = a.label;
+      var meta = document.createElement('span'); meta.className = 'meta';
+      meta.textContent = a.meta + (actionBlock(a) ? ' — ' + actionBlock(a) : '');
+      b.appendChild(lab); b.appendChild(meta);
+      b.addEventListener('click', function () { doAction(place, a); });
+      menuOpts.appendChild(b);
+    });
+    if (place.id === 'cafe') {
+      var nt = TIERS[tierIdx() + 1], note = document.createElement('div');
+      note.className = 'meta'; note.style.cssText = 'font-size:12.5px;color:#8fb8c9;padding:2px 6px 8px';
+      note.textContent = nt ? ('Next rung: ' + nt.name + ' · ' + fmtYen(nt.wage) + '/h · needs ' + reqText(nt.req)) : 'Top of this café ladder. The regulars know your name.';
+      menuOpts.appendChild(note);
+    }
+    var exit = document.createElement('button');
+    exit.className = 'opt exit'; exit.textContent = 'Step back outside';
+    exit.addEventListener('click', closeMenu);
+    menuOpts.appendChild(exit);
+  }
+  function openMenu(place) { menuOpen = true; renderMenu(place); menuEl.style.display = 'flex'; }
+  function closeMenu() { menuOpen = false; menuEl.style.display = 'none'; }
+
+  // ----- moments (first visits) -----
+  var momentEl = document.getElementById('moment');
+  function openMoment(sp) {
+    momentOpen = true; pendingPlace = sp;
+    document.getElementById('momentTitle').textContent = sp.name;
+    var extra = '';
+    if (!sp.done) {
+      sp.done = true;
+      found = SPOTS.filter(function (s) { return s.done; }).map(function (s) { return s.name; });
+      save('ts-found', JSON.stringify(found));
+      if (found.length === SPOTS.length) extra = ' That is every corner of this street you have found. It keeps the rest for your life here.';
+    }
+    document.getElementById('momentText').textContent = sp.text + extra;
+    document.getElementById('momentBtn').textContent = sp.id === 'home' ? 'Head in' : 'Step inside';
+    momentEl.style.display = 'flex';
+    chime(); updateHUD();
+  }
+  document.getElementById('momentBtn').addEventListener('click', function () {
+    momentEl.style.display = 'none'; momentOpen = false;
+    if (pendingPlace) { var p = pendingPlace; pendingPlace = null; openMenu(p); }
+  });
+  function openPlace(place) {
+    if (uiOpen()) return;
+    if (place.id !== 'home' && !place.done) openMoment(place);
+    else openMenu(place);
+  }
+
+  // ----- character sheet -----
+  var sheetEl = document.getElementById('sheet');
+  function openSheet() {
+    sheetOpen = true;
+    var t = TIERS[tierIdx()], nt = TIERS[tierIdx() + 1];
+    document.getElementById('sheetRows').innerHTML =
+      'Day <b>' + LIFE.day + '</b> · ' + fmtClock(LIFE.clock) + '<br>' +
+      'Wallet <b>' + fmtYen(LIFE.yen) + '</b> · Energy <b>' + LIFE.energy + '</b><br>' +
+      'Smarts <b>' + LIFE.smarts + '</b> · Presence <b>' + LIFE.presence + '</b> · Fitness <b>' + LIFE.fitness + '</b><br>' +
+      'Job <b>Café ' + t.name + '</b> · ' + fmtYen(t.wage) + '/h' + (nt ? '<br>Next: ' + nt.name + ' needs ' + reqText(nt.req) : '<br>Top of the café ladder') +
+      (LIFE.textbook ? '<br>On your shelf: <b>the good textbook</b> (study +4)' : '') +
+      '<br>Walked <b>' + Math.round(totalM) + ' m</b> all time on this street';
+    sheetEl.style.display = 'flex';
+  }
+  document.getElementById('youBtn').addEventListener('click', openSheet);
+  document.getElementById('sheetBtn').addEventListener('click', function () { sheetOpen = false; sheetEl.style.display = 'none'; });
+
   // ----- drawing -----
   function drawFallback(cam) {
     var g = ctx.createLinearGradient(0, 0, 0, H);
@@ -211,7 +439,26 @@
     ctx.fillStyle = '#cfe9f5'; ctx.font = '15px Georgia'; ctx.textAlign = 'center';
     ctx.fillText('the street is still being painted…', W / 2, 90); ctx.textAlign = 'left';
   }
-
+  var TINT_KEYS = [[420, 170, 200, 255, 0.13], [720, 210, 225, 255, 0.05], [1020, 0, 0, 0, 0], [1260, 8, 12, 44, 0.16], [1440, 5, 8, 34, 0.26]];
+  function drawTint() {
+    var c = LIFE.clock, i = 0;
+    while (i < TINT_KEYS.length - 2 && c > TINT_KEYS[i + 1][0]) i++;
+    var a = TINT_KEYS[i], b = TINT_KEYS[i + 1], f = Math.max(0, Math.min(1, (c - a[0]) / (b[0] - a[0])));
+    var r = Math.round(a[1] + (b[1] - a[1]) * f), g = Math.round(a[2] + (b[2] - a[2]) * f), bl = Math.round(a[3] + (b[3] - a[3]) * f), al = a[4] + (b[4] - a[4]) * f;
+    if (al <= 0.003) return;
+    ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + bl + ',' + al + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+  function drawHome(cam) {
+    var x = HOME.x - cam; if (x < -60 || x > W + 60) return;
+    ctx.fillStyle = '#1a1410'; ctx.fillRect(x - 19, GROUND - 100, 38, 100);
+    ctx.strokeStyle = '#3a2c1c'; ctx.lineWidth = 2; ctx.strokeRect(x - 19, GROUND - 100, 38, 100);
+    ctx.fillStyle = '#0e0a08'; ctx.fillRect(x - 13, GROUND - 92, 26, 92);
+    ctx.fillStyle = '#ffd76a'; ctx.beginPath(); ctx.arc(x + 8, GROUND - 46, 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,190,90,.85)'; ctx.fillRect(x - 13, GROUND - 92, 26, 20);
+    ctx.fillStyle = 'rgba(20,12,6,.9)'; ctx.font = 'bold 8px Georgia'; ctx.textAlign = 'center';
+    ctx.fillText('HOME', x, GROUND - 79); ctx.textAlign = 'left';
+  }
   function drawWalkerShape(x, feetY, refl) {
     var s = refl ? -0.55 : 1;
     ctx.save();
@@ -219,36 +466,29 @@
     var lp = moving ? Math.sin(phase) * 13 : 0, lp2 = moving ? Math.sin(phase + Math.PI) * 13 : 0;
     var bob = moving ? Math.abs(Math.sin(phase)) * 2.2 : Math.sin(performance.now() / 900) * 0.7;
     ctx.lineCap = 'round';
-    // legs
     ctx.strokeStyle = '#0b101d'; ctx.lineWidth = 7;
     ctx.beginPath(); ctx.moveTo(0, -38); ctx.lineTo(lp, 0); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, -38); ctx.lineTo(lp2, 0); ctx.stroke();
-    // coat
     ctx.fillStyle = '#101b30';
     ctx.beginPath();
     ctx.moveTo(-11, -40 - bob); ctx.lineTo(10, -40 - bob); ctx.lineTo(13, -86 - bob); ctx.lineTo(-9, -88 - bob);
     ctx.closePath(); ctx.fill();
-    // head
     ctx.fillStyle = '#0d1526';
     ctx.beginPath(); ctx.arc(2, -96 - bob, 8.5, 0, Math.PI * 2); ctx.fill();
-    // umbrella
     ctx.strokeStyle = '#0a0f1c'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(10, -58 - bob); ctx.lineTo(16, -104 - bob); ctx.stroke();
     ctx.fillStyle = '#12303e';
     ctx.beginPath(); ctx.arc(16, -106 - bob, 37, Math.PI * 1.02, Math.PI * 1.98); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = 'rgba(126,231,255,.5)'; ctx.lineWidth = 1.4;
     ctx.beginPath(); ctx.arc(16, -106 - bob, 37, Math.PI * 1.55, Math.PI * 1.98); ctx.stroke();
-    // scarf spark of colour
     ctx.fillStyle = '#ff5f9e'; ctx.fillRect(-4, -90 - bob, 13, 5);
     ctx.restore();
   }
-
   function draw(t) {
     var cam = Math.max(0, Math.min(WORLD - W, wx - W * 0.45));
     if (plateReady) ctx.drawImage(plate, -cam, 0, WORLD, H);
     else drawFallback(cam);
 
-    // neon breath over the signs
     SPOTS.forEach(function (sp, i) {
       var sx = sp.x - cam; if (sx < -120 || sx > W + 120) return;
       var a = 0.05 + 0.03 * Math.sin(t / 700 + i * 1.7);
@@ -258,7 +498,6 @@
       ctx.globalAlpha = 1;
     });
 
-    // steam over the ramen door
     if (!calm || Math.random() < 0.4) {
       if (Math.random() < 0.25) steam.push({ x: SPOTS[1].x + (Math.random() * 30 - 15), y: 330, r: 8, a: 0.16 });
     }
@@ -271,34 +510,33 @@
       ctx.fillStyle = rg; ctx.fillRect(sx - p.r * 2.2, p.y - p.r * 2.2, p.r * 4.4, p.r * 4.4);
     });
 
-    // hotspot markers
+    drawTint();
+    drawHome(cam);
+
     var near = null;
-    SPOTS.forEach(function (sp) {
+    PLACES.forEach(function (sp) {
       var sx = sp.x - cam; if (sx < -40 || sx > W + 40) return;
       var d = Math.abs(wx - sp.x);
       if (d < 58) near = sp;
       var pulse = 3 + Math.sin(t / 320) * 1.2;
-      ctx.strokeStyle = sp.done ? 'rgba(160,255,200,.65)' : sp.color;
+      var isDone = sp.id === 'home' ? true : sp.done;
+      ctx.strokeStyle = isDone ? 'rgba(160,255,200,.65)' : sp.color;
       ctx.lineWidth = 1.6;
       ctx.beginPath(); ctx.arc(sx, GROUND - 118, 9 + pulse * 0.4, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = sp.done ? 'rgba(160,255,200,.9)' : sp.color;
+      ctx.fillStyle = isDone ? 'rgba(160,255,200,.9)' : sp.color;
       ctx.beginPath(); ctx.arc(sx, GROUND - 118, 2.6, 0, Math.PI * 2); ctx.fill();
     });
-    lookBtn.style.display = (near && started && !momentOpen) ? 'block' : 'none';
-    lookBtn.onclick = near ? function () { openMoment(near); } : null;
+    lookBtn.style.display = (near && started && !uiOpen()) ? 'block' : 'none';
+    lookBtn.textContent = near ? (near.id === 'home' ? 'Home' : 'Look') : 'Look';
+    lookBtn.onclick = near ? function () { openPlace(near); } : null;
 
-    // walker + reflection
     if (plateReady) { ctx.globalAlpha = 0.16; drawWalkerShape(wx - cam, GROUND + 64, true); ctx.globalAlpha = 1; }
     drawWalkerShape(wx - cam, GROUND, false);
 
-    // rain
     ctx.strokeStyle = 'rgba(190,225,255,.34)'; ctx.lineWidth = 1.1;
     ctx.beginPath();
-    drops.forEach(function (dr) {
-      ctx.moveTo(dr.x, dr.y); ctx.lineTo(dr.x - 2.5, dr.y + dr.l);
-    });
+    drops.forEach(function (dr) { ctx.moveTo(dr.x, dr.y); ctx.lineTo(dr.x - 2.5, dr.y + dr.l); });
     ctx.stroke();
-    // ripples on the street band
     ripples = ripples.filter(function (r) { return r.r < 15; });
     ripples.forEach(function (r) {
       r.r += 0.55;
@@ -307,39 +545,11 @@
       ctx.beginPath(); ctx.ellipse(r.x, r.y, r.r * 1.7, r.r * 0.5, 0, 0, Math.PI * 2); ctx.stroke();
     });
 
-    // gentle edge vignette
     var vg = ctx.createLinearGradient(0, 0, W, 0);
     vg.addColorStop(0, 'rgba(0,0,0,.30)'); vg.addColorStop(0.12, 'rgba(0,0,0,0)');
     vg.addColorStop(0.88, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.30)');
     ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
   }
-
-  // ----- moments -----
-  var momentEl = document.getElementById('moment');
-  function openMoment(sp) {
-    if (momentOpen) return;
-    momentOpen = true;
-    document.getElementById('momentTitle').textContent = sp.name;
-    document.getElementById('momentText').textContent = sp.text;
-    momentEl.style.display = 'flex';
-    if (!sp.done) {
-      sp.done = true;
-      found = SPOTS.filter(function (s) { return s.done; }).map(function (s) { return s.name; });
-      save('ts-found', JSON.stringify(found));
-      if (found.length === SPOTS.length) {
-        document.getElementById('momentText').textContent = sp.text + ' That is every moment on this street. The rain keeps the rest.';
-      }
-    }
-    chime(); updateStats();
-  }
-  document.getElementById('momentBtn').addEventListener('click', function () {
-    momentEl.style.display = 'none'; momentOpen = false;
-  });
-
-  function updateStats() {
-    statsEl.textContent = 'Moments ' + found.length + '/4 · ' + Math.round(distM) + ' m this walk · ' + Math.round(totalM) + ' m all time';
-  }
-  updateStats();
 
   // ----- input -----
   var holdL = false, holdR = false;
@@ -357,11 +567,11 @@
   window.addEventListener('keydown', function (e) { keys[e.key] = true; });
   window.addEventListener('keyup', function (e) { keys[e.key] = false; });
   cv.addEventListener('pointerdown', function (e) {
-    // tap a glowing spot to look
+    if (uiOpen()) return;
     var r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) * (W / r.width);
     var cam = Math.max(0, Math.min(WORLD - W, wx - W * 0.45));
-    SPOTS.forEach(function (sp) {
-      if (Math.abs(sp.x - cam - sx) < 46 && Math.abs(wx - sp.x) < 90) openMoment(sp);
+    PLACES.forEach(function (sp) {
+      if (Math.abs(sp.x - cam - sx) < 46 && Math.abs(wx - sp.x) < 90) openPlace(sp);
     });
   });
 
@@ -380,8 +590,8 @@
   document.getElementById('startBtn').addEventListener('click', function () {
     document.getElementById('startScr').style.display = 'none';
     started = true; audioInit(); if (AC && AC.resume) AC.resume();
+    if (LIFE.day === 1 && LIFE.clock === 420 && LIFE.yen === 3000) toast('Day 1. The café is hiring, if you can call it that.');
   });
-  document.addEventListener('visibilitychange', function () { /* rAF pauses itself; dt is clamped */ });
 
   // ----- main loop -----
   var last = 0;
@@ -389,7 +599,7 @@
     requestAnimationFrame(loop);
     var dt = Math.min(3, last ? (ts - last) / 16.7 : 1); last = ts;
     var dir = (holdR || keys['ArrowRight'] || keys['d'] ? 1 : 0) - (holdL || keys['ArrowLeft'] || keys['a'] ? 1 : 0);
-    moving = (dir !== 0 && started && !momentOpen) ? 1 : 0;
+    moving = (dir !== 0 && started && !uiOpen()) ? 1 : 0;
     if (moving) {
       facing = dir;
       var step = 2.3 * dt * dir;
@@ -397,7 +607,9 @@
       phase += 0.16 * dt;
       var dm = Math.abs(step) / 46;
       distM += dm; totalM += dm;
-      if ((loop.acc = (loop.acc || 0) + dm) > 4) { loop.acc = 0; save('ts-total', String(totalM)); updateStats(); }
+      LIFE.walkAcc += dm;
+      while (LIFE.walkAcc >= 400) { LIFE.walkAcc -= 400; LIFE.fitness++; toast('Fitness +1 — the street itself is training you', 3200); saveLife(); }
+      if ((loop.acc = (loop.acc || 0) + dm) > 4) { loop.acc = 0; save('ts-total', String(totalM)); saveLife(); updateHUD(); }
     }
     drops.forEach(function (dr) {
       dr.y += dr.v * dt / 60 * 3.4; dr.x -= 0.7 * dt;
@@ -405,6 +617,7 @@
     });
     draw(ts);
   }
+  updateHUD();
   requestAnimationFrame(loop);
 })();
 </script>
