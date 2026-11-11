@@ -26,7 +26,7 @@
   .sub { font-size:12px; color:#9fd8e8; letter-spacing:1px; margin-top:2px; }
   #life { font-size:14px; color:#fff; margin-top:5px; letter-spacing:.5px; display:flex; align-items:center; gap:8px; }
   #ebar { width:92px; height:8px; border:1px solid rgba(190,240,255,.55); border-radius:99px; overflow:hidden; background:rgba(8,16,30,.6); }
-  #efill { height:100%; width:100%; background:linear-gradient(90deg,#39d5ee,#8ff5c8); }
+  #efill { height:100%; width:100%; background:linear-gradient(90deg,#39d5ee,#8ff5c8); display:block; }
   #efill.low { background:linear-gradient(90deg,#ff9d5c,#ff5f7a); }
   #stats { font-size:12px; color:#a9cede; margin-top:3px; letter-spacing:.5px; }
   .hud .btns { display:flex; gap:8px; pointer-events:auto; }
@@ -53,11 +53,13 @@
     padding-bottom:max(34px, calc(10px + env(safe-area-inset-bottom)));
     pointer-events:none;
   }
+  .cluster { display:flex; gap:10px; align-items:flex-end; }
   .hold {
     pointer-events:auto; width:86px; height:86px; border-radius:50%; font-size:30px; line-height:1;
     background:rgba(10,22,40,.55); border:1px solid rgba(126,231,255,.5); color:#bdf1ff;
     display:flex; align-items:center; justify-content:center;
   }
+  .hold.sm { width:64px; height:64px; font-size:22px; }
   .hold.on { background:rgba(46,120,160,.55); }
   #lookBtn {
     pointer-events:auto; align-self:center; font-size:15px; padding:12px 22px; display:none;
@@ -109,9 +111,9 @@
 <div class="hud">
   <div class="left">
     <h1>TOKYO STROLL</h1>
-    <div class="sub">NEON RAIN · ONE QUIET STREET</div>
-    <div id="life"><span id="lifetext">Day 1 · 07:00 · ¥3,000</span><span id="ebar"><span id="efill" style="display:block"></span></span><span id="eText" style="font-size:12px;color:#a9cede">Energy 100</span></div>
-    <div id="stats">Moments 0/4 · 0 m walked</div>
+    <div class="sub" id="areaName">NEON STREET</div>
+    <div id="life"><span id="lifetext">Day 1 · 07:00 · ¥3,000</span><span id="ebar"><span id="efill"></span></span><span id="eText" style="font-size:12px;color:#a9cede">Energy 100</span></div>
+    <div id="stats">Moments 0/9 · 0 m walked</div>
   </div>
   <div class="btns">
     <button id="youBtn">You</button>
@@ -119,20 +121,26 @@
     <button id="soundBtn">Sound: On</button>
   </div>
 </div>
-<div id="pilot">TOKYO STROLL PILOT v2.0 · life update test · not on the link page</div>
+<div id="pilot">TOKYO STROLL PILOT v2.1 · district update test · not on the link page</div>
 <div id="toast"></div>
 
 <div id="controls">
-  <div class="hold" id="leftBtn">◀</div>
+  <div class="cluster">
+    <div class="hold" id="leftBtn">◀</div>
+    <div class="hold" id="rightBtn">▶</div>
+  </div>
   <button id="lookBtn">Look</button>
-  <div class="hold" id="rightBtn">▶</div>
+  <div class="cluster">
+    <div class="hold sm" id="upBtn">▲</div>
+    <div class="hold sm" id="downBtn">▼</div>
+  </div>
 </div>
 
 <div class="overlay" id="startScr">
   <div class="card">
     <h2>TOKYO STROLL</h2>
-    <p>You are broke in Tokyo: ¥3,000, a tiny apartment at the end of one rainy street, and a life to build on it. Work the café, study at the bookshop, eat when you can, sleep at home.</p>
-    <p class="small">Hold the arrows to walk. Stop at a glowing marker and tap Look to step inside. The clock only moves when you do something. Rent arrives with the next update; this build is the loop itself.</p>
+    <p>You are broke in Tokyo: ¥3,000, a tiny apartment, and a whole little district to live in. Walk the streets freely, step up to the doors, work the café, study, train, eat, sleep.</p>
+    <p class="small">Hold ◀ ▶ to walk the street, ▲ ▼ to step toward or away from the buildings. Doors open when you are up close to them. Off the ends of the streets, the district continues.</p>
     <button class="big" id="startBtn">Start day one</button>
     <p class="small" style="margin-top:12px">Best held sideways · your life saves as you go</p>
   </div>
@@ -164,7 +172,7 @@
 <div class="overlay" id="rotate">
   <div class="card">
     <h2>↻</h2>
-    <p>Turn your phone sideways.<br>This street runs landscape.</p>
+    <p>Turn your phone sideways.<br>This district runs landscape.</p>
   </div>
 </div>
 
@@ -192,11 +200,13 @@
   try { found = JSON.parse(load('ts-found', '[]')); } catch (e) { found = []; }
   var totalM = parseFloat(load('ts-total', '0')) || 0;
 
-  // ----- the life (ts-life, spec v2.0; lastRentDay reserved for v2.1) -----
+  // ----- the life (ts-life v1; v2.1 adds district position additively) -----
+  var DEF = { v: 1, day: 1, clock: 420, yen: 3000, energy: 100, smarts: 8, presence: 6, fitness: 6, textbook: false, shifts: 0, walkAcc: 0, lastRentDay: 0, scr: 'a', wx: 120, wy: 0.35, bouquetDay: 0, coinDay: 0 };
   var LIFE;
   try { LIFE = JSON.parse(load('ts-life', 'null')); } catch (e) { LIFE = null; }
-  if (!LIFE || LIFE.v !== 1) LIFE = { v: 1, day: 1, clock: 420, yen: 3000, energy: 100, smarts: 8, presence: 6, fitness: 6, textbook: false, shifts: 0, walkAcc: 0, lastRentDay: 0 };
-  function saveLife() { save('ts-life', JSON.stringify(LIFE)); }
+  if (!LIFE || LIFE.v !== 1) LIFE = Object.assign({}, DEF);
+  else LIFE = Object.assign({}, DEF, LIFE);
+  function saveLife() { LIFE.wx = Math.round(wx); LIFE.wy = Math.round(wy * 100) / 100; LIFE.scr = scr; save('ts-life', JSON.stringify(LIFE)); }
 
   var TIERS = [
     { name: 'Dishwasher', wage: 900, req: null, gain: { fitness: 1 }, gainText: '+1 Fitness' },
@@ -209,25 +219,36 @@
   function shiftCost() { return 35 - (LIFE.fitness >= 40 ? 9 : LIFE.fitness >= 20 ? 5 : 0); }
   function fmtClock(m) { var h = Math.floor(m / 60), mm = m % 60; return (h < 10 ? '0' : '') + h + ':' + (mm < 10 ? '0' : '') + mm; }
   function fmtYen(n) { return '¥' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-  // ----- the street plate -----
-  var plate = new Image(), plateReady = false;
-  plate.onload = function () { plateReady = true; };
-  plate.src = 'tokyo-plate.webp';
-  var WORLD = 1260;
-  var GROUND = 456;
+  // ----- the district: three screens -----
+  function mkImg(src) { var o = { img: new Image(), ready: false }; o.img.onload = function () { o.ready = true; }; o.img.src = src; return o; }
+  var SCREENS = {
+    a:      { plate: mkImg('tokyo-plate.webp'),        world: 1260, gTop: 428, gBot: 490, name: 'NEON STREET',    exitL: null,    exitR: 'corner' },
+    corner: { plate: mkImg('tokyo-corner.webp'),       world: 960,  gTop: 436, gBot: 512, name: 'THE CORNER',     exitL: 'a',     exitR: 'b' },
+    b:      { plate: mkImg('tokyo-block-b.webp'),      world: 1260, gTop: 428, gBot: 490, name: 'STATION STREET', exitL: 'corner', exitR: null }
+  };
+  var scr = (SCREENS[LIFE.scr] ? LIFE.scr : 'a');
+  function SC() { return SCREENS[scr]; }
+  function feetY() { var s = SC(); return s.gTop + (s.gBot - s.gTop) * wy; }
+  function wScale() { return 0.9 + 0.2 * wy; }
 
-  var SPOTS = [
-    { id: 'cafe', f: 0.135, name: 'THE CAFÉ', color: '#ff5f9e', text: 'Rain ticks on the awning. Inside, the windows have fogged at the edges and somebody is in no hurry at all.' },
-    { id: 'ramen', f: 0.392, name: 'THE RAMEN SHOP', color: '#39d5ee', text: 'Every time the curtain lifts, steam rolls out into the rain. Garlic, ginger, and hot broth, right there on the sidewalk.' },
-    { id: 'books', f: 0.652, name: 'THE BOOKSHOP', color: '#ff5f9e', text: 'Open late, lit warm. Paper and wood and one small bonsai in the window, doing very well for itself.' },
-    { id: 'vending', f: 0.885, name: 'THE VENDING MACHINES', color: '#39d5ee', text: 'They hum in pink and blue at the end of the street. Hot corn soup in a can. Somehow, tonight, that sounds perfect.' }
+  var PLACES = [
+    { scr: 'a', id: 'cafe', f: 0.135, name: 'THE CAFÉ', color: '#ff5f9e', text: 'Rain ticks on the awning. Inside, the windows have fogged at the edges and somebody is in no hurry at all.' },
+    { scr: 'a', id: 'ramen', f: 0.392, name: 'THE RAMEN SHOP', color: '#39d5ee', text: 'Every time the curtain lifts, steam rolls out into the rain. Garlic, ginger, and hot broth, right there on the sidewalk.' },
+    { scr: 'a', id: 'books', f: 0.652, name: 'THE BOOKSHOP', color: '#ff5f9e', text: 'Open late, lit warm. Paper and wood and one small bonsai in the window, doing very well for itself.' },
+    { scr: 'a', id: 'vending', f: 0.885, name: 'THE VENDING MACHINES', color: '#39d5ee', text: 'They hum in pink and blue at the end of the street. Hot corn soup in a can. Somehow, tonight, that sounds perfect.' },
+    { scr: 'a', id: 'home', x: 58, name: 'HOME', color: '#ffd76a' },
+    { scr: 'corner', id: 'shrine', f: 0.60, name: 'THE CORNER SHRINE', color: '#ffd76a', text: 'A tiny shrine where the streets bend, one lantern lit against the rain. Somebody tends this, every day, for strangers.' },
+    { scr: 'b', id: 'gym', f: 0.13, name: 'THE GYM', color: '#39d5ee', text: 'Treadmills glowing behind glass at this hour. Everyone in there is running from the same weather.' },
+    { scr: 'b', id: 'konbini', f: 0.42, name: 'THE KONBINI', color: '#ffffff', text: 'White light, warm air, the little chime when the door opens. The konbini asks nothing of you and provides nearly everything.' },
+    { scr: 'b', id: 'flowers', f: 0.70, name: 'THE FLOWER SHOP', color: '#ff9ecb', text: 'Buckets of pink and white under the awning, all of it completely unbothered by the rain.' },
+    { scr: 'b', id: 'station', f: 0.915, name: 'THE STATION', color: '#39d5ee', text: 'Stairs going down into warm light and announcements. The whole city is down there. For now, your world is these three streets.' }
   ];
-  var HOME = { id: 'home', name: 'HOME', x: 58, color: '#ffd76a' };
-  SPOTS.forEach(function (s) { s.x = s.f * WORLD; s.done = found.indexOf(s.name) >= 0; });
-  var PLACES = SPOTS.concat([HOME]);
+  PLACES.forEach(function (p) { if (p.x === undefined) p.x = p.f * SCREENS[p.scr].world; p.done = p.text ? found.indexOf(p.name) >= 0 : true; });
+  function herePlaces() { return PLACES.filter(function (p) { return p.scr === scr; }); }
 
-  // ----- actions (Rosa's tables; Charm ships as Presence) -----
+  // ----- actions -----
   function shiftAction() {
     var t = TIERS[tierIdx()];
     return { label: 'Work a shift — ' + t.name, kind: 'shift',
@@ -236,7 +257,7 @@
   }
   var ACTIONS = {
     cafe: [shiftAction,
-      { label: 'Chat with the regulars', kind: 'chat', yen: 0, mins: 60, dE: -5, gain: { presence: 1 }, meta: '1 h · free · −5 Energy · +1 Presence' },
+      { label: 'Chat with the regulars', kind: 'gain', yen: 0, mins: 60, dE: -5, gain: { presence: 1 }, meta: '1 h · free · −5 Energy · +1 Presence' },
       { label: 'Coffee', kind: 'food', yen: 450, mins: 60, dE: 15, meta: '1 h · ¥450 · +15 Energy' },
       { label: 'Cake set', kind: 'food', yen: 850, mins: 60, dE: 28, meta: '1 h · ¥850 · +28 Energy' }],
     ramen: [
@@ -249,12 +270,28 @@
       { label: 'Energy drink', kind: 'food', yen: 250, mins: 0, dE: 12, meta: 'instant · ¥250 · +12 Energy' },
       { label: 'Snack bar', kind: 'food', yen: 150, mins: 0, dE: 6, meta: 'instant · ¥150 · +6 Energy' }],
     home: [
-      { label: 'Sleep', kind: 'sleep', yen: 0, mins: 0, dE: 0, meta: 'ends the day · wake 07:00 · Energy full' }]
+      { label: 'Sleep', kind: 'sleep', yen: 0, mins: 0, dE: 0, meta: 'ends the day · wake 07:00 · Energy full' }],
+    gym: [
+      { label: 'Train — treadmills and weights', kind: 'gain', yen: 800, mins: 60, dE: -20, gain: { fitness: 1 }, meta: '1 h · ¥800 · −20 Energy · +1 Fitness' },
+      { label: 'Protein shake', kind: 'food', yen: 400, mins: 0, dE: 10, meta: 'instant · ¥400 · +10 Energy' }],
+    konbini: [
+      { label: 'Onigiri', kind: 'food', yen: 180, mins: 0, dE: 10, meta: 'instant · ¥180 · +10 Energy' },
+      { label: 'Hot coffee can', kind: 'food', yen: 150, mins: 0, dE: 6, meta: 'instant · ¥150 · +6 Energy' },
+      { label: 'Bento box', kind: 'food', yen: 600, mins: 60, dE: 30, meta: '1 h · ¥600 · +30 Energy' }],
+    flowers: [
+      { label: 'A small bouquet', kind: 'bouquet', yen: 700, mins: 30, dE: 0, gain: { presence: 1 }, meta: '30 min · ¥700 · +1 Presence · once a day' },
+      { label: 'Just look at the flowers', kind: 'flavor', yen: 0, mins: 0, dE: 0, meta: 'free · a quiet minute', flavor: 'Buckets of pink and white, all of it unbothered by the rain. Yours, for a minute, for free.' }],
+    station: [
+      { label: 'Watch a train pass', kind: 'flavor', yen: 0, mins: 0, dE: 0, meta: 'free', flavor: 'Light sweeps up the stairs, the ground hums once, and the city moves on without you. For now.' }],
+    shrine: [
+      { label: 'Leave a coin', kind: 'coin', yen: 10, mins: 0, dE: 0, gain: { presence: 1 }, meta: '¥10 · +1 Presence · once a day' },
+      { label: 'Stand a moment', kind: 'flavor', yen: 0, mins: 0, dE: 0, meta: 'free', flavor: 'Rain on the little roof, one lantern lit. Somebody maintains this, every day, for strangers.' }]
   };
 
   // ----- walker / run state -----
-  var wx = 120, facing = 1, moving = 0, phase = 0, distM = 0;
+  var wx = LIFE.wx || 120, wy = (typeof LIFE.wy === 'number' ? LIFE.wy : 0.35), facing = 1, moving = 0, phase = 0, distM = 0;
   var started = false, momentOpen = false, menuOpen = false, sheetOpen = false, pendingPlace = null;
+  var fade = 0, fadeSwap = null;
   function uiOpen() { return momentOpen || menuOpen || sheetOpen; }
 
   // ----- weather -----
@@ -304,10 +341,11 @@
     var ef = document.getElementById('efill');
     ef.style.width = LIFE.energy + '%';
     ef.className = LIFE.energy <= 25 ? 'low' : '';
-    ef.id = 'efill';
     document.getElementById('eText').textContent = 'Energy ' + LIFE.energy;
-    var foundCount = SPOTS.filter(function (s) { return s.done; }).length;
-    statsEl.textContent = 'Moments ' + foundCount + '/4 · ' + Math.round(distM) + ' m this walk · ' + Math.round(totalM) + ' m all time';
+    document.getElementById('areaName').textContent = SC().name;
+    var total = PLACES.filter(function (p) { return p.text; }).length;
+    var got = PLACES.filter(function (p) { return p.text && p.done; }).length;
+    statsEl.textContent = 'Moments ' + got + '/' + total + ' · ' + Math.round(distM) + ' m this walk · ' + Math.round(totalM) + ' m all time';
   }
 
   // ----- day rollover -----
@@ -321,6 +359,8 @@
   function actionBlock(a) {
     if (a.can) { var c = a.can(); if (c) return c; }
     if (a.kind === 'buy' && LIFE.textbook) return 'Already on your shelf';
+    if (a.kind === 'bouquet' && LIFE.bouquetDay === LIFE.day) return 'Your room has flowers already';
+    if (a.kind === 'coin' && LIFE.coinDay === LIFE.day) return 'The shrine has your coin today';
     if (a.kind === 'food' && LIFE.energy > 85) return "You're full";
     if (a.yen && LIFE.yen < a.yen) return 'Not enough ¥';
     if (a.dE < 0 && LIFE.energy + a.dE < 0) return 'Too tired — eat, or head home';
@@ -329,26 +369,29 @@
   function doAction(place, a) {
     var block = actionBlock(a);
     if (block) { toast(block); return; }
+    if (a.kind === 'flavor') { toast(a.flavor, 4200); return; }
     if (a.kind === 'sleep') { closeMenu(); doRollover(false); return; }
     var beforeTier = tierIdx(), notes = [];
     if (a.kind === 'shift') {
       var t = TIERS[beforeTier];
       LIFE.yen += t.wage * 4; LIFE.energy -= shiftCost(); LIFE.clock += 240; LIFE.shifts++;
-      for (var g in t.gain) { LIFE[g] += t.gain[g]; notes.push('+' + t.gain[g] + ' ' + g.charAt(0).toUpperCase() + g.slice(1)); }
+      for (var g in t.gain) { LIFE[g] += t.gain[g]; notes.push('+' + t.gain[g] + ' ' + cap(g)); }
       notes.unshift('+' + fmtYen(t.wage * 4));
     } else {
       if (a.yen) LIFE.yen -= a.yen;
       if (a.dE) LIFE.energy = Math.max(0, Math.min(100, LIFE.energy + a.dE));
       if (a.mins) LIFE.clock += a.mins;
       if (a.kind === 'study') { var gain = LIFE.textbook ? 4 : 3; LIFE.smarts += gain; notes.push('+' + gain + ' Smarts'); }
-      if (a.kind === 'chat') { LIFE.presence += 1; notes.push('+1 Presence'); }
       if (a.kind === 'buy') { LIFE.textbook = true; notes.push('Textbook on the shelf'); }
+      if (a.kind === 'bouquet') { LIFE.bouquetDay = LIFE.day; }
+      if (a.kind === 'coin') { LIFE.coinDay = LIFE.day; }
+      if (a.gain) for (var k in a.gain) { LIFE[k] += a.gain[k]; notes.push('+' + a.gain[k] + ' ' + cap(k)); }
       if (a.kind === 'food') notes.push((a.dE > 0 ? '+' : '') + a.dE + ' Energy');
     }
     saveLife(); updateHUD();
     var afterTier = tierIdx();
     if (afterTier > beforeTier) { toast('Promoted — you are the café ' + TIERS[afterTier].name + ' now. ' + notes.join(' · '), 3600); chime(); }
-    else toast(notes.join(' · ') + ' · ' + fmtClock(LIFE.clock));
+    else toast(notes.length ? notes.join(' · ') + ' · ' + fmtClock(LIFE.clock) : fmtClock(LIFE.clock));
     if (LIFE.energy <= 0 || LIFE.clock >= 1440) { closeMenu(); doRollover(true); return; }
     renderMenu(place);
   }
@@ -360,18 +403,19 @@
     menuOpts.innerHTML = '';
     (ACTIONS[place.id] || []).forEach(function (raw) {
       var a = (typeof raw === 'function') ? raw() : raw;
+      var blocked = actionBlock(a);
       var b = document.createElement('button');
-      b.className = 'opt' + (actionBlock(a) ? ' off' : '');
+      b.className = 'opt' + (blocked ? ' off' : '');
       var lab = document.createElement('span'); lab.className = 'lab'; lab.textContent = a.label;
       var meta = document.createElement('span'); meta.className = 'meta';
-      meta.textContent = a.meta + (actionBlock(a) ? ' — ' + actionBlock(a) : '');
+      meta.textContent = a.meta + (blocked ? ' — ' + blocked : '');
       b.appendChild(lab); b.appendChild(meta);
       b.addEventListener('click', function () { doAction(place, a); });
       menuOpts.appendChild(b);
     });
     if (place.id === 'cafe') {
       var nt = TIERS[tierIdx() + 1], note = document.createElement('div');
-      note.className = 'meta'; note.style.cssText = 'font-size:12.5px;color:#8fb8c9;padding:2px 6px 8px';
+      note.style.cssText = 'font-size:12.5px;color:#8fb8c9;padding:2px 6px 8px';
       note.textContent = nt ? ('Next rung: ' + nt.name + ' · ' + fmtYen(nt.wage) + '/h · needs ' + reqText(nt.req)) : 'Top of this café ladder. The regulars know your name.';
       menuOpts.appendChild(note);
     }
@@ -391,9 +435,10 @@
     var extra = '';
     if (!sp.done) {
       sp.done = true;
-      found = SPOTS.filter(function (s) { return s.done; }).map(function (s) { return s.name; });
+      found = PLACES.filter(function (s) { return s.text && s.done; }).map(function (s) { return s.name; });
       save('ts-found', JSON.stringify(found));
-      if (found.length === SPOTS.length) extra = ' That is every corner of this street you have found. It keeps the rest for your life here.';
+      var total = PLACES.filter(function (p) { return p.text; }).length;
+      if (found.length === total) extra = ' That is every corner of the district you have found. It keeps the rest for your life here.';
     }
     document.getElementById('momentText').textContent = sp.text + extra;
     document.getElementById('momentBtn').textContent = sp.id === 'home' ? 'Head in' : 'Step inside';
@@ -406,7 +451,7 @@
   });
   function openPlace(place) {
     if (uiOpen()) return;
-    if (place.id !== 'home' && !place.done) openMoment(place);
+    if (place.text && !place.done) openMoment(place);
     else openMenu(place);
   }
 
@@ -416,12 +461,12 @@
     sheetOpen = true;
     var t = TIERS[tierIdx()], nt = TIERS[tierIdx() + 1];
     document.getElementById('sheetRows').innerHTML =
-      'Day <b>' + LIFE.day + '</b> · ' + fmtClock(LIFE.clock) + '<br>' +
+      'Day <b>' + LIFE.day + '</b> · ' + fmtClock(LIFE.clock) + ' · ' + SC().name.toLowerCase() + '<br>' +
       'Wallet <b>' + fmtYen(LIFE.yen) + '</b> · Energy <b>' + LIFE.energy + '</b><br>' +
       'Smarts <b>' + LIFE.smarts + '</b> · Presence <b>' + LIFE.presence + '</b> · Fitness <b>' + LIFE.fitness + '</b><br>' +
       'Job <b>Café ' + t.name + '</b> · ' + fmtYen(t.wage) + '/h' + (nt ? '<br>Next: ' + nt.name + ' needs ' + reqText(nt.req) : '<br>Top of the café ladder') +
       (LIFE.textbook ? '<br>On your shelf: <b>the good textbook</b> (study +4)' : '') +
-      '<br>Walked <b>' + Math.round(totalM) + ' m</b> all time on this street';
+      '<br>Walked <b>' + Math.round(totalM) + ' m</b> all time in this district';
     sheetEl.style.display = 'flex';
   }
   document.getElementById('youBtn').addEventListener('click', openSheet);
@@ -433,11 +478,10 @@
     g.addColorStop(0, '#0a1428'); g.addColorStop(0.7, '#0d1a30'); g.addColorStop(1, '#060a14');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#101f3a';
-    for (var i = 0; i < 6; i++) ctx.fillRect(i * 220 - (cam % 220), 150, 170, GROUND - 150);
-    ctx.fillStyle = '#131c2c'; ctx.fillRect(0, GROUND, W, H - GROUND);
-    ctx.fillStyle = '#1d2c47'; ctx.fillRect(0, GROUND, W, 3);
+    for (var i = 0; i < 6; i++) ctx.fillRect(i * 220 - (cam % 220), 150, 170, 300);
+    ctx.fillStyle = '#131c2c'; ctx.fillRect(0, 460, W, H - 460);
     ctx.fillStyle = '#cfe9f5'; ctx.font = '15px Georgia'; ctx.textAlign = 'center';
-    ctx.fillText('the street is still being painted…', W / 2, 90); ctx.textAlign = 'left';
+    ctx.fillText('the district is still being painted…', W / 2, 90); ctx.textAlign = 'left';
   }
   var TINT_KEYS = [[420, 170, 200, 255, 0.13], [720, 210, 225, 255, 0.05], [1020, 0, 0, 0, 0], [1260, 8, 12, 44, 0.16], [1440, 5, 8, 34, 0.26]];
   function drawTint() {
@@ -450,19 +494,21 @@
     ctx.fillRect(0, 0, W, H);
   }
   function drawHome(cam) {
-    var x = HOME.x - cam; if (x < -60 || x > W + 60) return;
-    ctx.fillStyle = '#1a1410'; ctx.fillRect(x - 19, GROUND - 100, 38, 100);
-    ctx.strokeStyle = '#3a2c1c'; ctx.lineWidth = 2; ctx.strokeRect(x - 19, GROUND - 100, 38, 100);
-    ctx.fillStyle = '#0e0a08'; ctx.fillRect(x - 13, GROUND - 92, 26, 92);
-    ctx.fillStyle = '#ffd76a'; ctx.beginPath(); ctx.arc(x + 8, GROUND - 46, 2.4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,190,90,.85)'; ctx.fillRect(x - 13, GROUND - 92, 26, 20);
+    if (scr !== 'a') return;
+    var x = 58 - cam; if (x < -60 || x > W + 60) return;
+    var gy = feetY();
+    ctx.fillStyle = '#1a1410'; ctx.fillRect(x - 19, gy - 128, 38, 100);
+    ctx.strokeStyle = '#3a2c1c'; ctx.lineWidth = 2; ctx.strokeRect(x - 19, gy - 128, 38, 100);
+    ctx.fillStyle = '#0e0a08'; ctx.fillRect(x - 13, gy - 120, 26, 92);
+    ctx.fillStyle = '#ffd76a'; ctx.beginPath(); ctx.arc(x + 8, gy - 74, 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,190,90,.85)'; ctx.fillRect(x - 13, gy - 120, 26, 20);
     ctx.fillStyle = 'rgba(20,12,6,.9)'; ctx.font = 'bold 8px Georgia'; ctx.textAlign = 'center';
-    ctx.fillText('HOME', x, GROUND - 79); ctx.textAlign = 'left';
+    ctx.fillText('HOME', x, gy - 107); ctx.textAlign = 'left';
   }
-  function drawWalkerShape(x, feetY, refl) {
-    var s = refl ? -0.55 : 1;
+  function drawWalkerShape(x, fy, refl) {
+    var sc = wScale(), s = refl ? -0.55 : 1;
     ctx.save();
-    ctx.translate(x, feetY); ctx.scale(facing, s);
+    ctx.translate(x, fy); ctx.scale(facing * sc, s * sc);
     var lp = moving ? Math.sin(phase) * 13 : 0, lp2 = moving ? Math.sin(phase + Math.PI) * 13 : 0;
     var bob = moving ? Math.abs(Math.sin(phase)) * 2.2 : Math.sin(performance.now() / 900) * 0.7;
     ctx.lineCap = 'round';
@@ -484,12 +530,13 @@
     ctx.fillStyle = '#ff5f9e'; ctx.fillRect(-4, -90 - bob, 13, 5);
     ctx.restore();
   }
+  function camX() { var s = SC(); return Math.max(0, Math.min(s.world - W, wx - W * 0.45)); }
   function draw(t) {
-    var cam = Math.max(0, Math.min(WORLD - W, wx - W * 0.45));
-    if (plateReady) ctx.drawImage(plate, -cam, 0, WORLD, H);
+    var s = SC(), cam = camX(), fy = feetY();
+    if (s.plate.ready) ctx.drawImage(s.plate.img, -cam, 0, s.world, H);
     else drawFallback(cam);
 
-    SPOTS.forEach(function (sp, i) {
+    herePlaces().forEach(function (sp, i) {
       var sx = sp.x - cam; if (sx < -120 || sx > W + 120) return;
       var a = 0.05 + 0.03 * Math.sin(t / 700 + i * 1.7);
       var rg = ctx.createRadialGradient(sx, 195, 6, sx, 195, 120);
@@ -497,41 +544,54 @@
       ctx.globalAlpha = a; ctx.fillStyle = rg; ctx.fillRect(sx - 120, 75, 240, 240);
       ctx.globalAlpha = 1;
     });
-
-    if (!calm || Math.random() < 0.4) {
-      if (Math.random() < 0.25) steam.push({ x: SPOTS[1].x + (Math.random() * 30 - 15), y: 330, r: 8, a: 0.16 });
+    if (scr === 'corner') {
+      var pulse = 0.10 + 0.05 * Math.sin(t / 500);
+      var rg2 = ctx.createRadialGradient(935 - cam, 300, 4, 935 - cam, 300, 90);
+      rg2.addColorStop(0, 'rgba(140,255,170,1)'); rg2.addColorStop(1, 'rgba(140,255,170,0)');
+      ctx.globalAlpha = pulse; ctx.fillStyle = rg2; ctx.fillRect(935 - cam - 90, 210, 180, 180); ctx.globalAlpha = 1;
     }
-    steam = steam.filter(function (p) { return p.a > 0.01; });
-    steam.forEach(function (p) {
-      p.y -= 0.55; p.r += 0.35; p.a *= 0.985;
-      var sx = p.x - cam; if (sx < -60 || sx > W + 60) return;
-      var rg = ctx.createRadialGradient(sx, p.y, 1, sx, p.y, p.r * 2.2);
-      rg.addColorStop(0, 'rgba(230,240,255,' + p.a + ')'); rg.addColorStop(1, 'rgba(230,240,255,0)');
-      ctx.fillStyle = rg; ctx.fillRect(sx - p.r * 2.2, p.y - p.r * 2.2, p.r * 4.4, p.r * 4.4);
-    });
+
+    if (scr === 'a') {
+      if (!calm || Math.random() < 0.4) {
+        if (Math.random() < 0.25) steam.push({ x: PLACES[1].x + (Math.random() * 30 - 15), y: 330, r: 8, a: 0.16 });
+      }
+      steam = steam.filter(function (p) { return p.a > 0.01; });
+      steam.forEach(function (p) {
+        p.y -= 0.55; p.r += 0.35; p.a *= 0.985;
+        var sx = p.x - cam; if (sx < -60 || sx > W + 60) return;
+        var rg = ctx.createRadialGradient(sx, p.y, 1, sx, p.y, p.r * 2.2);
+        rg.addColorStop(0, 'rgba(230,240,255,' + p.a + ')'); rg.addColorStop(1, 'rgba(230,240,255,0)');
+        ctx.fillStyle = rg; ctx.fillRect(sx - p.r * 2.2, p.y - p.r * 2.2, p.r * 4.4, p.r * 4.4);
+      });
+    }
 
     drawTint();
     drawHome(cam);
 
-    var near = null;
-    PLACES.forEach(function (sp) {
+    var near = null, nearDeep = null;
+    herePlaces().forEach(function (sp) {
       var sx = sp.x - cam; if (sx < -40 || sx > W + 40) return;
       var d = Math.abs(wx - sp.x);
-      if (d < 58) near = sp;
+      if (d < 58) { if (wy < 0.55) near = sp; else nearDeep = sp; }
       var pulse = 3 + Math.sin(t / 320) * 1.2;
-      var isDone = sp.id === 'home' ? true : sp.done;
-      ctx.strokeStyle = isDone ? 'rgba(160,255,200,.65)' : sp.color;
+      ctx.strokeStyle = sp.done ? 'rgba(160,255,200,.65)' : sp.color;
       ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.arc(sx, GROUND - 118, 9 + pulse * 0.4, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = isDone ? 'rgba(160,255,200,.9)' : sp.color;
-      ctx.beginPath(); ctx.arc(sx, GROUND - 118, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx, s.gTop - 88, 9 + pulse * 0.4, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = sp.done ? 'rgba(160,255,200,.9)' : sp.color;
+      ctx.beginPath(); ctx.arc(sx, s.gTop - 88, 2.6, 0, Math.PI * 2); ctx.fill();
     });
-    lookBtn.style.display = (near && started && !uiOpen()) ? 'block' : 'none';
-    lookBtn.textContent = near ? (near.id === 'home' ? 'Home' : 'Look') : 'Look';
-    lookBtn.onclick = near ? function () { openPlace(near); } : null;
+    if (near && started && !uiOpen()) {
+      lookBtn.style.display = 'block';
+      lookBtn.textContent = near.id === 'home' ? 'Home' : 'Look';
+      lookBtn.onclick = function () { openPlace(near); };
+    } else if (nearDeep && started && !uiOpen()) {
+      lookBtn.style.display = 'block';
+      lookBtn.textContent = 'Step closer';
+      lookBtn.onclick = function () { toast('Step up toward the buildings — doors are on the far side of the walk.'); };
+    } else lookBtn.style.display = 'none';
 
-    if (plateReady) { ctx.globalAlpha = 0.16; drawWalkerShape(wx - cam, GROUND + 64, true); ctx.globalAlpha = 1; }
-    drawWalkerShape(wx - cam, GROUND, false);
+    if (s.plate.ready) { ctx.globalAlpha = 0.16; drawWalkerShape(wx - cam, fy + 56 * wScale(), true); ctx.globalAlpha = 1; }
+    drawWalkerShape(wx - cam, fy, false);
 
     ctx.strokeStyle = 'rgba(190,225,255,.34)'; ctx.lineWidth = 1.1;
     ctx.beginPath();
@@ -549,10 +609,24 @@
     vg.addColorStop(0, 'rgba(0,0,0,.30)'); vg.addColorStop(0.12, 'rgba(0,0,0,0)');
     vg.addColorStop(0.88, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.30)');
     ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+    if (fade > 0) { ctx.fillStyle = 'rgba(2,4,9,' + Math.min(1, fade) + ')'; ctx.fillRect(0, 0, W, H); }
+  }
+
+  // ----- screen transitions -----
+  function goScreen(dest, enterFrom) {
+    if (fade > 0) return;
+    fadeSwap = function () {
+      scr = dest;
+      wx = enterFrom === 'left' ? 40 : SC().world - 40;
+      saveLife(); updateHUD();
+      toast(SC().name.charAt(0) + SC().name.slice(1).toLowerCase() + ' — the rain follows you.', 1800);
+    };
+    fade = 0.001;
   }
 
   // ----- input -----
-  var holdL = false, holdR = false;
+  var holdL = false, holdR = false, holdU = false, holdD = false;
   function bindHold(id, set) {
     var el = document.getElementById(id);
     function on(e) { e.preventDefault(); set(true); el.classList.add('on'); }
@@ -563,14 +637,16 @@
   }
   bindHold('leftBtn', function (v) { holdL = v; });
   bindHold('rightBtn', function (v) { holdR = v; });
+  bindHold('upBtn', function (v) { holdU = v; });
+  bindHold('downBtn', function (v) { holdD = v; });
   var keys = {};
   window.addEventListener('keydown', function (e) { keys[e.key] = true; });
   window.addEventListener('keyup', function (e) { keys[e.key] = false; });
   cv.addEventListener('pointerdown', function (e) {
-    if (uiOpen()) return;
+    if (uiOpen() || wy >= 0.55) return;
     var r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) * (W / r.width);
-    var cam = Math.max(0, Math.min(WORLD - W, wx - W * 0.45));
-    PLACES.forEach(function (sp) {
+    var cam = camX();
+    herePlaces().forEach(function (sp) {
       if (Math.abs(sp.x - cam - sx) < 46 && Math.abs(wx - sp.x) < 90) openPlace(sp);
     });
   });
@@ -598,22 +674,37 @@
   function loop(ts) {
     requestAnimationFrame(loop);
     var dt = Math.min(3, last ? (ts - last) / 16.7 : 1); last = ts;
+    if (fade > 0) {
+      fade += dt * 0.09;
+      if (fade >= 1 && fadeSwap) { var f = fadeSwap; fadeSwap = null; f(); }
+      if (fade >= 2) fade = 0;
+      draw(ts);
+      return;
+    }
+    var s = SC();
     var dir = (holdR || keys['ArrowRight'] || keys['d'] ? 1 : 0) - (holdL || keys['ArrowLeft'] || keys['a'] ? 1 : 0);
-    moving = (dir !== 0 && started && !uiOpen()) ? 1 : 0;
+    var vdir = (holdD || keys['ArrowDown'] || keys['s'] ? 1 : 0) - (holdU || keys['ArrowUp'] || keys['w'] ? 1 : 0);
+    moving = ((dir !== 0 || vdir !== 0) && started && !uiOpen()) ? 1 : 0;
     if (moving) {
-      facing = dir;
-      var step = 2.3 * dt * dir;
-      wx = Math.max(26, Math.min(WORLD - 26, wx + step));
+      if (dir !== 0) {
+        facing = dir;
+        var step = 2.3 * dt * dir;
+        wx += step;
+        var dm = Math.abs(step) / 46;
+        distM += dm; totalM += dm;
+        LIFE.walkAcc += dm;
+        while (LIFE.walkAcc >= 400) { LIFE.walkAcc -= 400; LIFE.fitness++; toast('Fitness +1 — the district itself is training you', 3200); saveLife(); }
+        if ((loop.acc = (loop.acc || 0) + dm) > 4) { loop.acc = 0; save('ts-total', String(totalM)); saveLife(); updateHUD(); }
+        if (wx <= 22 && s.exitL) { goScreen(s.exitL, 'right'); }
+        else if (wx >= s.world - 22 && s.exitR) { goScreen(s.exitR, 'left'); }
+        wx = Math.max(18, Math.min(s.world - 18, wx));
+      }
+      if (vdir !== 0) wy = Math.max(0, Math.min(1, wy + vdir * 0.016 * dt));
       phase += 0.16 * dt;
-      var dm = Math.abs(step) / 46;
-      distM += dm; totalM += dm;
-      LIFE.walkAcc += dm;
-      while (LIFE.walkAcc >= 400) { LIFE.walkAcc -= 400; LIFE.fitness++; toast('Fitness +1 — the street itself is training you', 3200); saveLife(); }
-      if ((loop.acc = (loop.acc || 0) + dm) > 4) { loop.acc = 0; save('ts-total', String(totalM)); saveLife(); updateHUD(); }
     }
     drops.forEach(function (dr) {
       dr.y += dr.v * dt / 60 * 3.4; dr.x -= 0.7 * dt;
-      if (dr.y > H) { dr.y = -14; dr.x = Math.random() * (W + 120); if (Math.random() < 0.5) ripples.push({ x: dr.x, y: GROUND + 26 + Math.random() * 58, r: 2 }); }
+      if (dr.y > H) { dr.y = -14; dr.x = Math.random() * (W + 120); if (Math.random() < 0.5) ripples.push({ x: dr.x, y: SC().gBot + 8 + Math.random() * 34, r: 2 }); }
     });
     draw(ts);
   }
