@@ -47,24 +47,20 @@
     padding:8px 18px; border-radius:999px; opacity:0; transition:opacity .35s; pointer-events:none; white-space:nowrap;
     max-width:92vw; text-overflow:ellipsis; overflow:hidden;
   }
+  #joy { position:fixed; inset:0; z-index:4; }
+  #joyBase, #joyNub { position:fixed; border-radius:50%; pointer-events:none; display:none; z-index:6; }
+  #joyBase { width:104px; height:104px; border:1.5px solid rgba(126,231,255,.5); background:rgba(10,22,40,.30); }
+  #joyNub { width:46px; height:46px; background:rgba(126,231,255,.45); border:1px solid rgba(220,250,255,.7); }
   #controls {
-    position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:space-between; align-items:flex-end;
-    padding:0 calc(14px + env(safe-area-inset-right)) 34px calc(14px + env(safe-area-inset-left));
+    position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; justify-content:center; align-items:flex-end;
+    padding:0 14px 34px;
     padding-bottom:max(34px, calc(10px + env(safe-area-inset-bottom)));
     pointer-events:none;
   }
-  .cluster { display:flex; gap:10px; align-items:flex-end; }
-  .hold {
-    pointer-events:auto; width:86px; height:86px; border-radius:50%; font-size:30px; line-height:1;
-    background:rgba(10,22,40,.55); border:1px solid rgba(126,231,255,.5); color:#bdf1ff;
-    display:flex; align-items:center; justify-content:center;
-  }
-  .hold.sm { width:64px; height:64px; font-size:22px; }
-  .hold.on { background:rgba(46,120,160,.55); }
   #lookBtn {
-    pointer-events:auto; align-self:center; font-size:15px; padding:12px 22px; display:none;
+    pointer-events:auto; font-size:15px; padding:12px 24px; display:none;
     background:linear-gradient(160deg, rgba(255,46,136,.85), rgba(150,20,90,.85)); border-color:#ff9ecb; color:#fff;
-    box-shadow:0 0 18px rgba(255,46,136,.5);
+    box-shadow:0 0 18px rgba(255,46,136,.5); border-radius:999px; border:1px solid #ff9ecb;
   }
   .overlay {
     position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; text-align:center;
@@ -107,11 +103,13 @@
 </head>
 <body>
 <div id="wrap"><canvas id="cv" width="960" height="540"></canvas></div>
+<div id="joy"></div>
+<div id="joyBase"></div><div id="joyNub"></div>
 
 <div class="hud">
   <div class="left">
     <h1>TOKYO STROLL</h1>
-    <div class="sub" id="areaName">NEON STREET</div>
+    <div class="sub" id="areaName">WEST SIDE</div>
     <div id="life"><span id="lifetext">Day 1 · 07:00 · ¥3,000</span><span id="ebar"><span id="efill"></span></span><span id="eText" style="font-size:12px;color:#a9cede">Energy 100</span></div>
     <div id="stats">Moments 0/9 · 0 m walked</div>
   </div>
@@ -121,26 +119,18 @@
     <button id="soundBtn">Sound: On</button>
   </div>
 </div>
-<div id="pilot">TOKYO STROLL PILOT v2.1 · district update test · not on the link page</div>
+<div id="pilot">TOKYO STROLL PILOT v3.0 · top-down update test · not on the link page</div>
 <div id="toast"></div>
 
 <div id="controls">
-  <div class="cluster">
-    <div class="hold" id="leftBtn">◀</div>
-    <div class="hold" id="rightBtn">▶</div>
-  </div>
   <button id="lookBtn">Look</button>
-  <div class="cluster">
-    <div class="hold sm" id="upBtn">▲</div>
-    <div class="hold sm" id="downBtn">▼</div>
-  </div>
 </div>
 
 <div class="overlay" id="startScr">
   <div class="card">
     <h2>TOKYO STROLL</h2>
-    <p>You are broke in Tokyo: ¥3,000, a tiny apartment, and a whole little district to live in. Walk the streets freely, step up to the doors, work the café, study, train, eat, sleep.</p>
-    <p class="small">Hold ◀ ▶ to walk the street, ▲ ▼ to step toward or away from the buildings. Doors open when you are up close to them. Off the ends of the streets, the district continues.</p>
+    <p>You are broke in Tokyo: ¥3,000, a tiny apartment, and a whole little district seen from above. Walk anywhere, cross at the crossings, find the glowing doors, and live.</p>
+    <p class="small">Drag anywhere to walk that way (a thumbstick appears under your thumb). Doors open when you stand at them. Work the café, study, train, eat, sleep. Your life from before carries over; only the streets changed.</p>
     <button class="big" id="startBtn">Start day one</button>
     <p class="small" style="margin-top:12px">Best held sideways · your life saves as you go</p>
   </div>
@@ -179,6 +169,7 @@
 <script>
 (function () {
   var W = 960, H = 540;
+  var WORLD_W = 2048, WORLD_H = 1365;
   var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
   var statsEl = document.getElementById('stats');
   var lookBtn = document.getElementById('lookBtn');
@@ -200,13 +191,14 @@
   try { found = JSON.parse(load('ts-found', '[]')); } catch (e) { found = []; }
   var totalM = parseFloat(load('ts-total', '0')) || 0;
 
-  // ----- the life (ts-life v1; v2.1 adds district position additively) -----
-  var DEF = { v: 1, day: 1, clock: 420, yen: 3000, energy: 100, smarts: 8, presence: 6, fitness: 6, textbook: false, shifts: 0, walkAcc: 0, lastRentDay: 0, scr: 'a', wx: 120, wy: 0.35, bouquetDay: 0, coinDay: 0 };
+  // ----- the life (ts-life v1, unchanged economy; position migrated to map coords) -----
+  var HOME_DOOR = { x: 307, y: 1296 };
+  var DEF = { v: 1, day: 1, clock: 420, yen: 3000, energy: 100, smarts: 8, presence: 6, fitness: 6, textbook: false, shifts: 0, walkAcc: 0, lastRentDay: 0, mapv: 3, wx: HOME_DOOR.x, wy: HOME_DOOR.y + 26, bouquetDay: 0, coinDay: 0 };
   var LIFE;
   try { LIFE = JSON.parse(load('ts-life', 'null')); } catch (e) { LIFE = null; }
   if (!LIFE || LIFE.v !== 1) LIFE = Object.assign({}, DEF);
-  else LIFE = Object.assign({}, DEF, LIFE);
-  function saveLife() { LIFE.wx = Math.round(wx); LIFE.wy = Math.round(wy * 100) / 100; LIFE.scr = scr; save('ts-life', JSON.stringify(LIFE)); }
+  else { LIFE = Object.assign({}, DEF, LIFE); if (LIFE.mapv !== 3) { LIFE.mapv = 3; LIFE.wx = DEF.wx; LIFE.wy = DEF.wy; } }
+  function saveLife() { LIFE.wx = Math.round(wx); LIFE.wy = Math.round(wy); save('ts-life', JSON.stringify(LIFE)); }
 
   var TIERS = [
     { name: 'Dishwasher', wage: 900, req: null, gain: { fitness: 1 }, gainText: '+1 Fitness' },
@@ -221,34 +213,62 @@
   function fmtYen(n) { return '¥' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-  // ----- the district: three screens -----
-  function mkImg(src) { var o = { img: new Image(), ready: false }; o.img.onload = function () { o.ready = true; }; o.img.src = src; return o; }
-  var SCREENS = {
-    a:      { plate: mkImg('tokyo-plate.webp'),        world: 1260, gTop: 428, gBot: 490, name: 'NEON STREET',    exitL: null,    exitR: 'corner' },
-    corner: { plate: mkImg('tokyo-corner.webp'),       world: 960,  gTop: 436, gBot: 512, name: 'THE CORNER',     exitL: 'a',     exitR: 'b' },
-    b:      { plate: mkImg('tokyo-block-b.webp'),      world: 1260, gTop: 428, gBot: 490, name: 'STATION STREET', exitL: 'corner', exitR: null }
-  };
-  var scr = (SCREENS[LIFE.scr] ? LIFE.scr : 'a');
-  function SC() { return SCREENS[scr]; }
-  function feetY() { var s = SC(); return s.gTop + (s.gBot - s.gTop) * wy; }
-  function wScale() { return 0.9 + 0.2 * wy; }
+  // ----- the map -----
+  var mapImg = new Image(), mapReady = false;
+  mapImg.onload = function () { mapReady = true; };
+  mapImg.src = 'tokyo-map.webp';
+
+  // Building footprints as fractions of the map (hand-mapped from the painting).
+  var BF = [
+    [0.008,0.005,0.082,0.075],[0.012,0.085,0.085,0.160],[0.200,0.030,0.285,0.090],[0.190,0.095,0.245,0.165],[0.250,0.090,0.325,0.165],
+    [0.420,0.025,0.490,0.085],[0.420,0.090,0.485,0.165],[0.505,0.030,0.575,0.075],[0.505,0.080,0.565,0.165],
+    [0.915,0.005,0.995,0.090],[0.930,0.095,0.995,0.165],
+    [0.008,0.200,0.085,0.295],[0.005,0.300,0.075,0.390],[0.175,0.200,0.260,0.275],[0.265,0.200,0.335,0.270],[0.175,0.280,0.255,0.375],[0.260,0.275,0.335,0.375],
+    [0.415,0.200,0.490,0.275],[0.500,0.215,0.565,0.270],[0.415,0.285,0.485,0.375],[0.495,0.280,0.575,0.375],
+    [0.645,0.200,0.740,0.260],[0.745,0.195,0.815,0.260],[0.650,0.265,0.735,0.375],[0.740,0.265,0.815,0.375],
+    [0.880,0.200,0.985,0.265],[0.900,0.270,0.995,0.375],
+    [0.005,0.435,0.075,0.530],[0.005,0.535,0.065,0.645],[0.145,0.435,0.335,0.630],
+    [0.410,0.440,0.485,0.525],[0.500,0.440,0.580,0.520],[0.410,0.530,0.485,0.630],[0.490,0.530,0.585,0.630],
+    [0.645,0.440,0.765,0.530],[0.770,0.435,0.845,0.520],[0.655,0.535,0.770,0.640],[0.775,0.525,0.845,0.640],
+    [0.910,0.440,0.990,0.525],[0.920,0.530,0.995,0.640],
+    [0.115,0.720,0.200,0.815],[0.205,0.730,0.255,0.800],[0.235,0.715,0.315,0.820],[0.115,0.840,0.185,0.945],[0.190,0.830,0.240,0.925],[0.235,0.825,0.310,0.945],
+    [0.395,0.720,0.600,0.945],
+    [0.685,0.720,0.765,0.815],[0.785,0.720,0.865,0.815],[0.690,0.820,0.760,0.940],[0.765,0.835,0.815,0.940],[0.815,0.825,0.880,0.945],
+    [0.945,0.715,0.995,0.825],[0.955,0.830,0.995,0.945]
+  ];
+  var BLOCKS = BF.map(function (b) { return { x1: b[0] * WORLD_W, y1: b[1] * WORLD_H, x2: b[2] * WORLD_W, y2: b[3] * WORLD_H }; });
+  var PARK = { x1: 0.635 * WORLD_W, y1: 0.008 * WORLD_H, x2: 0.845 * WORLD_W, y2: 0.168 * WORLD_H };
+  function collides(x, y) {
+    var r = 9;
+    for (var i = 0; i < BLOCKS.length; i++) {
+      var b = BLOCKS[i];
+      if (x + r > b.x1 && x - r < b.x2 && y + r > b.y1 && y - r < b.y2) return true;
+    }
+    return false;
+  }
 
   var PLACES = [
-    { scr: 'a', id: 'cafe', f: 0.135, name: 'THE CAFÉ', color: '#ff5f9e', text: 'Rain ticks on the awning. Inside, the windows have fogged at the edges and somebody is in no hurry at all.' },
-    { scr: 'a', id: 'ramen', f: 0.392, name: 'THE RAMEN SHOP', color: '#39d5ee', text: 'Every time the curtain lifts, steam rolls out into the rain. Garlic, ginger, and hot broth, right there on the sidewalk.' },
-    { scr: 'a', id: 'books', f: 0.652, name: 'THE BOOKSHOP', color: '#ff5f9e', text: 'Open late, lit warm. Paper and wood and one small bonsai in the window, doing very well for itself.' },
-    { scr: 'a', id: 'vending', f: 0.885, name: 'THE VENDING MACHINES', color: '#39d5ee', text: 'They hum in pink and blue at the end of the street. Hot corn soup in a can. Somehow, tonight, that sounds perfect.' },
-    { scr: 'a', id: 'home', x: 58, name: 'HOME', color: '#ffd76a' },
-    { scr: 'corner', id: 'shrine', f: 0.60, name: 'THE CORNER SHRINE', color: '#ffd76a', text: 'A tiny shrine where the streets bend, one lantern lit against the rain. Somebody tends this, every day, for strangers.' },
-    { scr: 'b', id: 'gym', f: 0.13, name: 'THE GYM', color: '#39d5ee', text: 'Treadmills glowing behind glass at this hour. Everyone in there is running from the same weather.' },
-    { scr: 'b', id: 'konbini', f: 0.42, name: 'THE KONBINI', color: '#ffffff', text: 'White light, warm air, the little chime when the door opens. The konbini asks nothing of you and provides nearly everything.' },
-    { scr: 'b', id: 'flowers', f: 0.70, name: 'THE FLOWER SHOP', color: '#ff9ecb', text: 'Buckets of pink and white under the awning, all of it completely unbothered by the rain.' },
-    { scr: 'b', id: 'station', f: 0.915, name: 'THE STATION', color: '#39d5ee', text: 'Stairs going down into warm light and announcements. The whole city is down there. For now, your world is these three streets.' }
+    { id: 'home', name: 'HOME', color: '#ffd76a', x: HOME_DOOR.x, y: HOME_DOOR.y },
+    { id: 'cafe', name: 'THE CAFÉ', color: '#39d5ee', x: 492, y: 868, text: 'Rain ticks on the awning. Inside, the windows have fogged at the edges and somebody is in no hurry at all.' },
+    { id: 'ramen', name: 'THE RAMEN SHOP', color: '#ffb35c', x: 1018, y: 868, text: 'Every time the curtain lifts, steam rolls out into the rain. Garlic, ginger, and hot broth, right there on the sidewalk.' },
+    { id: 'books', name: 'THE BOOKSHOP', color: '#ff5f9e', x: 444, y: 233, text: 'Open late, lit warm. Paper and wood and one small bonsai in the window, doing very well for itself.' },
+    { id: 'gym', name: 'THE GYM', color: '#39d5ee', x: 1419, y: 520, text: 'Treadmills glowing behind glass at this hour. Everyone in there is running from the same weather.' },
+    { id: 'konbini', name: 'THE KONBINI', color: '#ffffff', x: 1454, y: 882, text: 'White light, warm air, the little chime when the door opens. The konbini asks nothing of you and provides nearly everything.' },
+    { id: 'flowers', name: 'THE FLOWER SHOP', color: '#ff9ecb', x: 1956, y: 882, text: 'Buckets of pink and white under the awning, all of it completely unbothered by the rain.' },
+    { id: 'vending', name: 'THE VENDING MACHINES', color: '#39d5ee', x: 748, y: 930, text: 'They hum in pink and blue at the end of the street. Hot corn soup in a can. Somehow, tonight, that sounds perfect.' },
+    { id: 'shrine', name: 'THE CORNER SHRINE', color: '#ffd76a', x: 1516, y: 140, text: 'A tiny shrine where the park path bends, one lantern lit against the rain. Somebody tends this, every day, for strangers.' },
+    { id: 'station', name: 'THE STATION', color: '#39d5ee', x: 1018, y: 1306, text: 'Stairs going down into warm light and announcements. The whole city is down there. For now, your world is this district.' }
   ];
-  PLACES.forEach(function (p) { if (p.x === undefined) p.x = p.f * SCREENS[p.scr].world; p.done = p.text ? found.indexOf(p.name) >= 0 : true; });
-  function herePlaces() { return PLACES.filter(function (p) { return p.scr === scr; }); }
+  PLACES.forEach(function (p) { p.done = p.text ? found.indexOf(p.name) >= 0 : true; });
+  function zoneName() {
+    if (wx > PARK.x1 && wx < PARK.x2 && wy > PARK.y1 && wy < PARK.y2 + 40) return 'THE LITTLE PARK';
+    if (wy > 1150) return 'STATION FRONT';
+    if (wx < 700) return 'WEST SIDE';
+    if (wx > 1500) return 'EAST SIDE';
+    return 'DOWNTOWN';
+  }
 
-  // ----- actions -----
+  // ----- actions (unchanged from the life spec) -----
   function shiftAction() {
     var t = TIERS[tierIdx()];
     return { label: 'Work a shift — ' + t.name, kind: 'shift',
@@ -289,10 +309,10 @@
   };
 
   // ----- walker / run state -----
-  var wx = LIFE.wx || 120, wy = (typeof LIFE.wy === 'number' ? LIFE.wy : 0.35), facing = 1, moving = 0, phase = 0, distM = 0;
+  var wx = LIFE.wx, wy = LIFE.wy, moveAng = -Math.PI / 2, moving = 0, phase = 0, distM = 0;
   var started = false, momentOpen = false, menuOpen = false, sheetOpen = false, pendingPlace = null;
-  var fade = 0, fadeSwap = null;
   function uiOpen() { return momentOpen || menuOpen || sheetOpen; }
+  if (collides(wx, wy)) { wx = HOME_DOOR.x; wy = HOME_DOOR.y + 26; }
 
   // ----- weather -----
   var drops = [], ripples = [], steam = [];
@@ -342,7 +362,7 @@
     ef.style.width = LIFE.energy + '%';
     ef.className = LIFE.energy <= 25 ? 'low' : '';
     document.getElementById('eText').textContent = 'Energy ' + LIFE.energy;
-    document.getElementById('areaName').textContent = SC().name;
+    document.getElementById('areaName').textContent = zoneName();
     var total = PLACES.filter(function (p) { return p.text; }).length;
     var got = PLACES.filter(function (p) { return p.text && p.done; }).length;
     statsEl.textContent = 'Moments ' + got + '/' + total + ' · ' + Math.round(distM) + ' m this walk · ' + Math.round(totalM) + ' m all time';
@@ -351,6 +371,7 @@
   // ----- day rollover -----
   function doRollover(late, msg) {
     LIFE.day++; LIFE.clock = late ? 540 : 420; LIFE.energy = late ? 80 : 100; LIFE.shifts = 0;
+    wx = HOME_DOOR.x; wy = HOME_DOOR.y + 26;
     saveLife(); updateHUD();
     toast(msg || (late ? 'You trudge home through the rain. Tomorrow starts late.' : 'Day ' + LIFE.day + ' — morning, wet and quiet.'), 3600);
   }
@@ -461,7 +482,7 @@
     sheetOpen = true;
     var t = TIERS[tierIdx()], nt = TIERS[tierIdx() + 1];
     document.getElementById('sheetRows').innerHTML =
-      'Day <b>' + LIFE.day + '</b> · ' + fmtClock(LIFE.clock) + ' · ' + SC().name.toLowerCase() + '<br>' +
+      'Day <b>' + LIFE.day + '</b> · ' + fmtClock(LIFE.clock) + ' · ' + zoneName().toLowerCase() + '<br>' +
       'Wallet <b>' + fmtYen(LIFE.yen) + '</b> · Energy <b>' + LIFE.energy + '</b><br>' +
       'Smarts <b>' + LIFE.smarts + '</b> · Presence <b>' + LIFE.presence + '</b> · Fitness <b>' + LIFE.fitness + '</b><br>' +
       'Job <b>Café ' + t.name + '</b> · ' + fmtYen(t.wage) + '/h' + (nt ? '<br>Next: ' + nt.name + ' needs ' + reqText(nt.req) : '<br>Top of the café ladder') +
@@ -473,16 +494,6 @@
   document.getElementById('sheetBtn').addEventListener('click', function () { sheetOpen = false; sheetEl.style.display = 'none'; });
 
   // ----- drawing -----
-  function drawFallback(cam) {
-    var g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#0a1428'); g.addColorStop(0.7, '#0d1a30'); g.addColorStop(1, '#060a14');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#101f3a';
-    for (var i = 0; i < 6; i++) ctx.fillRect(i * 220 - (cam % 220), 150, 170, 300);
-    ctx.fillStyle = '#131c2c'; ctx.fillRect(0, 460, W, H - 460);
-    ctx.fillStyle = '#cfe9f5'; ctx.font = '15px Georgia'; ctx.textAlign = 'center';
-    ctx.fillText('the district is still being painted…', W / 2, 90); ctx.textAlign = 'left';
-  }
   var TINT_KEYS = [[420, 170, 200, 255, 0.13], [720, 210, 225, 255, 0.05], [1020, 0, 0, 0, 0], [1260, 8, 12, 44, 0.16], [1440, 5, 8, 34, 0.26]];
   function drawTint() {
     var c = LIFE.clock, i = 0;
@@ -493,105 +504,89 @@
     ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + bl + ',' + al + ')';
     ctx.fillRect(0, 0, W, H);
   }
-  function drawHome(cam) {
-    if (scr !== 'a') return;
-    var x = 58 - cam; if (x < -60 || x > W + 60) return;
-    var gy = feetY();
-    ctx.fillStyle = '#1a1410'; ctx.fillRect(x - 19, gy - 128, 38, 100);
-    ctx.strokeStyle = '#3a2c1c'; ctx.lineWidth = 2; ctx.strokeRect(x - 19, gy - 128, 38, 100);
-    ctx.fillStyle = '#0e0a08'; ctx.fillRect(x - 13, gy - 120, 26, 92);
-    ctx.fillStyle = '#ffd76a'; ctx.beginPath(); ctx.arc(x + 8, gy - 74, 2.4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,190,90,.85)'; ctx.fillRect(x - 13, gy - 120, 26, 20);
-    ctx.fillStyle = 'rgba(20,12,6,.9)'; ctx.font = 'bold 8px Georgia'; ctx.textAlign = 'center';
-    ctx.fillText('HOME', x, gy - 107); ctx.textAlign = 'left';
+  function camXY() {
+    return {
+      x: Math.max(0, Math.min(WORLD_W - W, wx - W * 0.5)),
+      y: Math.max(0, Math.min(WORLD_H - H, wy - H * 0.55))
+    };
   }
-  function drawWalkerShape(x, fy, refl) {
-    var sc = wScale(), s = refl ? -0.55 : 1;
-    ctx.save();
-    ctx.translate(x, fy); ctx.scale(facing * sc, s * sc);
-    var lp = moving ? Math.sin(phase) * 13 : 0, lp2 = moving ? Math.sin(phase + Math.PI) * 13 : 0;
-    var bob = moving ? Math.abs(Math.sin(phase)) * 2.2 : Math.sin(performance.now() / 900) * 0.7;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#0b101d'; ctx.lineWidth = 7;
-    ctx.beginPath(); ctx.moveTo(0, -38); ctx.lineTo(lp, 0); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, -38); ctx.lineTo(lp2, 0); ctx.stroke();
-    ctx.fillStyle = '#101b30';
-    ctx.beginPath();
-    ctx.moveTo(-11, -40 - bob); ctx.lineTo(10, -40 - bob); ctx.lineTo(13, -86 - bob); ctx.lineTo(-9, -88 - bob);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#0d1526';
-    ctx.beginPath(); ctx.arc(2, -96 - bob, 8.5, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#0a0f1c'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(10, -58 - bob); ctx.lineTo(16, -104 - bob); ctx.stroke();
-    ctx.fillStyle = '#12303e';
-    ctx.beginPath(); ctx.arc(16, -106 - bob, 37, Math.PI * 1.02, Math.PI * 1.98); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(126,231,255,.5)'; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.arc(16, -106 - bob, 37, Math.PI * 1.55, Math.PI * 1.98); ctx.stroke();
-    ctx.fillStyle = '#ff5f9e'; ctx.fillRect(-4, -90 - bob, 13, 5);
-    ctx.restore();
-  }
-  function camX() { var s = SC(); return Math.max(0, Math.min(s.world - W, wx - W * 0.45)); }
-  function draw(t) {
-    var s = SC(), cam = camX(), fy = feetY();
-    if (s.plate.ready) ctx.drawImage(s.plate.img, -cam, 0, s.world, H);
-    else drawFallback(cam);
-
-    herePlaces().forEach(function (sp, i) {
-      var sx = sp.x - cam; if (sx < -120 || sx > W + 120) return;
-      var a = 0.05 + 0.03 * Math.sin(t / 700 + i * 1.7);
-      var rg = ctx.createRadialGradient(sx, 195, 6, sx, 195, 120);
-      rg.addColorStop(0, sp.color); rg.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.globalAlpha = a; ctx.fillStyle = rg; ctx.fillRect(sx - 120, 75, 240, 240);
-      ctx.globalAlpha = 1;
+  function nearestPlace() {
+    var best = null, bd = 40;
+    PLACES.forEach(function (p) {
+      var d = Math.hypot(wx - p.x, wy - p.y);
+      if (d < bd) { bd = d; best = p; }
     });
-    if (scr === 'corner') {
-      var pulse = 0.10 + 0.05 * Math.sin(t / 500);
-      var rg2 = ctx.createRadialGradient(935 - cam, 300, 4, 935 - cam, 300, 90);
-      rg2.addColorStop(0, 'rgba(140,255,170,1)'); rg2.addColorStop(1, 'rgba(140,255,170,0)');
-      ctx.globalAlpha = pulse; ctx.fillStyle = rg2; ctx.fillRect(935 - cam - 90, 210, 180, 180); ctx.globalAlpha = 1;
-    }
-
-    if (scr === 'a') {
-      if (!calm || Math.random() < 0.4) {
-        if (Math.random() < 0.25) steam.push({ x: PLACES[1].x + (Math.random() * 30 - 15), y: 330, r: 8, a: 0.16 });
-      }
-      steam = steam.filter(function (p) { return p.a > 0.01; });
-      steam.forEach(function (p) {
-        p.y -= 0.55; p.r += 0.35; p.a *= 0.985;
-        var sx = p.x - cam; if (sx < -60 || sx > W + 60) return;
-        var rg = ctx.createRadialGradient(sx, p.y, 1, sx, p.y, p.r * 2.2);
-        rg.addColorStop(0, 'rgba(230,240,255,' + p.a + ')'); rg.addColorStop(1, 'rgba(230,240,255,0)');
-        ctx.fillStyle = rg; ctx.fillRect(sx - p.r * 2.2, p.y - p.r * 2.2, p.r * 4.4, p.r * 4.4);
+    return best;
+  }
+  function drawWalker(sx, sy, t) {
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.beginPath(); ctx.ellipse(sx, sy + 3, 13, 6, 0, 0, Math.PI * 2); ctx.fill();
+    if (moving) {
+      var fa = moveAng, off = Math.sin(phase) > 0 ? 1 : -1;
+      ctx.fillStyle = '#0b101d';
+      [-1, 1].forEach(function (s2) {
+        var a2 = fa + s2 * 0.5, rr = s2 === off ? 13.5 : 10.5;
+        ctx.beginPath(); ctx.ellipse(sx + Math.cos(a2) * rr, sy + Math.sin(a2) * rr, 3.4, 2.4, a2, 0, Math.PI * 2); ctx.fill();
       });
     }
+    var tilt = moving ? 1.5 : 0;
+    var cx2 = sx + Math.cos(moveAng) * tilt, cy2 = sy + Math.sin(moveAng) * tilt;
+    var rg = ctx.createRadialGradient(cx2 - 4, cy2 - 5, 2, cx2, cy2, 16);
+    rg.addColorStop(0, '#1d4258'); rg.addColorStop(0.8, '#12303e'); rg.addColorStop(1, '#0c2230');
+    ctx.fillStyle = rg;
+    ctx.beginPath(); ctx.arc(cx2, cy2, 15.5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(126,231,255,.55)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(cx2, cy2, 15.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(190,240,255,.28)'; ctx.lineWidth = 1;
+    for (var i = 0; i < 4; i++) {
+      var a3 = i * Math.PI / 2 + 0.4;
+      ctx.beginPath(); ctx.moveTo(cx2, cy2); ctx.lineTo(cx2 + Math.cos(a3) * 15, cy2 + Math.sin(a3) * 15); ctx.stroke();
+    }
+    ctx.fillStyle = '#0d1526';
+    ctx.beginPath(); ctx.arc(cx2, cy2, 4.6, 0, Math.PI * 2); ctx.fill();
+    var bx = moveAng + Math.PI;
+    ctx.fillStyle = '#ff5f9e';
+    ctx.beginPath(); ctx.arc(cx2 + Math.cos(bx) * 10.5, cy2 + Math.sin(bx) * 10.5, 3, 0, Math.PI * 2); ctx.fill();
+  }
+  function draw(t) {
+    var cam = camXY();
+    if (mapReady) ctx.drawImage(mapImg, -cam.x, -cam.y, WORLD_W, WORLD_H);
+    else {
+      ctx.fillStyle = '#0b1526'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#cfe9f5'; ctx.font = '15px Georgia'; ctx.textAlign = 'center';
+      ctx.fillText('the district is still being painted…', W / 2, 90); ctx.textAlign = 'left';
+    }
+    PLACES.forEach(function (p, i) {
+      var sx = p.x - cam.x, sy = p.y - cam.y;
+      if (sx < -60 || sx > W + 60 || sy < -60 || sy > H + 60) return;
+      var a = 0.10 + 0.05 * Math.sin(t / 700 + i * 1.7);
+      var rg = ctx.createRadialGradient(sx, sy, 2, sx, sy, 44);
+      rg.addColorStop(0, p.color); rg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = a; ctx.fillStyle = rg; ctx.fillRect(sx - 44, sy - 44, 88, 88);
+      ctx.globalAlpha = 1;
+      var pulse = 2.4 + Math.sin(t / 320) * 0.8;
+      ctx.strokeStyle = p.done ? 'rgba(160,255,200,.75)' : p.color;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(sx, sy, 8 + pulse * 0.4, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = p.done ? 'rgba(160,255,200,.95)' : p.color;
+      ctx.beginPath(); ctx.arc(sx, sy, 2.4, 0, Math.PI * 2); ctx.fill();
+    });
+    // ramen steam, rising off the roof in world space
+    if (!calm || Math.random() < 0.4) {
+      if (Math.random() < 0.22) steam.push({ x: 1018 + (Math.random() * 40 - 20), y: 690, r: 9, a: 0.15 });
+    }
+    steam = steam.filter(function (p) { return p.a > 0.01; });
+    steam.forEach(function (p) {
+      p.y -= 0.7; p.r += 0.4; p.a *= 0.982;
+      var sx = p.x - cam.x, sy = p.y - cam.y;
+      if (sx < -70 || sx > W + 70 || sy < -70 || sy > H + 70) return;
+      var rg = ctx.createRadialGradient(sx, sy, 1, sx, sy, p.r * 2.2);
+      rg.addColorStop(0, 'rgba(230,240,255,' + p.a + ')'); rg.addColorStop(1, 'rgba(230,240,255,0)');
+      ctx.fillStyle = rg; ctx.fillRect(sx - p.r * 2.2, sy - p.r * 2.2, p.r * 4.4, p.r * 4.4);
+    });
 
     drawTint();
-    drawHome(cam);
-
-    var near = null, nearDeep = null;
-    herePlaces().forEach(function (sp) {
-      var sx = sp.x - cam; if (sx < -40 || sx > W + 40) return;
-      var d = Math.abs(wx - sp.x);
-      if (d < 58) { if (wy < 0.55) near = sp; else nearDeep = sp; }
-      var pulse = 3 + Math.sin(t / 320) * 1.2;
-      ctx.strokeStyle = sp.done ? 'rgba(160,255,200,.65)' : sp.color;
-      ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.arc(sx, s.gTop - 88, 9 + pulse * 0.4, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = sp.done ? 'rgba(160,255,200,.9)' : sp.color;
-      ctx.beginPath(); ctx.arc(sx, s.gTop - 88, 2.6, 0, Math.PI * 2); ctx.fill();
-    });
-    if (near && started && !uiOpen()) {
-      lookBtn.style.display = 'block';
-      lookBtn.textContent = near.id === 'home' ? 'Home' : 'Look';
-      lookBtn.onclick = function () { openPlace(near); };
-    } else if (nearDeep && started && !uiOpen()) {
-      lookBtn.style.display = 'block';
-      lookBtn.textContent = 'Step closer';
-      lookBtn.onclick = function () { toast('Step up toward the buildings — doors are on the far side of the walk.'); };
-    } else lookBtn.style.display = 'none';
-
-    if (s.plate.ready) { ctx.globalAlpha = 0.16; drawWalkerShape(wx - cam, fy + 56 * wScale(), true); ctx.globalAlpha = 1; }
-    drawWalkerShape(wx - cam, fy, false);
+    drawWalker(wx - cam.x, wy - cam.y, t);
 
     ctx.strokeStyle = 'rgba(190,225,255,.34)'; ctx.lineWidth = 1.1;
     ctx.beginPath();
@@ -605,51 +600,56 @@
       ctx.beginPath(); ctx.ellipse(r.x, r.y, r.r * 1.7, r.r * 0.5, 0, 0, Math.PI * 2); ctx.stroke();
     });
 
-    var vg = ctx.createLinearGradient(0, 0, W, 0);
-    vg.addColorStop(0, 'rgba(0,0,0,.30)'); vg.addColorStop(0.12, 'rgba(0,0,0,0)');
-    vg.addColorStop(0.88, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.30)');
-    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
-
-    if (fade > 0) { ctx.fillStyle = 'rgba(2,4,9,' + Math.min(1, fade) + ')'; ctx.fillRect(0, 0, W, H); }
+    var near = started && !uiOpen() ? nearestPlace() : null;
+    if (near) {
+      lookBtn.style.display = 'block';
+      lookBtn.textContent = near.id === 'home' ? 'Home' : 'Enter';
+      lookBtn.onclick = function () { openPlace(near); };
+    } else lookBtn.style.display = 'none';
   }
 
-  // ----- screen transitions -----
-  function goScreen(dest, enterFrom) {
-    if (fade > 0) return;
-    fadeSwap = function () {
-      scr = dest;
-      wx = enterFrom === 'left' ? 40 : SC().world - 40;
-      saveLife(); updateHUD();
-      toast(SC().name.charAt(0) + SC().name.slice(1).toLowerCase() + ' — the rain follows you.', 1800);
-    };
-    fade = 0.001;
+  // ----- input: floating thumbstick + tap-to-enter + keys -----
+  var joyEl = document.getElementById('joy'), joyBase = document.getElementById('joyBase'), joyNub = document.getElementById('joyNub');
+  var joy = { on: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0, t0: 0, moved: 0 };
+  function joyPos(e) {
+    var r = cv.getBoundingClientRect();
+    return { cx: (e.clientX - r.left) * (W / r.width) + r.left, cy: (e.clientY - r.top) * (H / r.height) + r.top, gx: (e.clientX - r.left) * (W / r.width), gy: (e.clientY - r.top) * (H / r.height) };
   }
-
-  // ----- input -----
-  var holdL = false, holdR = false, holdU = false, holdD = false;
-  function bindHold(id, set) {
-    var el = document.getElementById(id);
-    function on(e) { e.preventDefault(); set(true); el.classList.add('on'); }
-    function off(e) { e.preventDefault(); set(false); el.classList.remove('on'); }
-    el.addEventListener('pointerdown', on);
-    el.addEventListener('pointerup', off); el.addEventListener('pointerleave', off); el.addEventListener('pointercancel', off);
-    el.addEventListener('touchstart', on, { passive: false }); el.addEventListener('touchend', off);
+  joyEl.addEventListener('pointerdown', function (e) {
+    if (!started || uiOpen()) return;
+    var p = joyPos(e);
+    joy.on = true; joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joy.dx = 0; joy.dy = 0; joy.t0 = performance.now(); joy.moved = 0;
+    joyBase.style.display = 'block'; joyNub.style.display = 'block';
+    joyBase.style.left = (e.clientX - 52) + 'px'; joyBase.style.top = (e.clientY - 52) + 'px';
+    joyNub.style.left = (e.clientX - 23) + 'px'; joyNub.style.top = (e.clientY - 23) + 'px';
+    joy.tapX = p.gx; joy.tapY = p.gy;
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!joy.on || e.pointerId !== joy.id) return;
+    var dx = e.clientX - joy.ox, dy = e.clientY - joy.oy;
+    var m = Math.hypot(dx, dy), max = 46;
+    joy.moved = Math.max(joy.moved, m);
+    if (m > max) { dx = dx / m * max; dy = dy / m * max; m = max; }
+    joy.dx = dx / max; joy.dy = dy / max;
+    joyNub.style.left = (joy.ox + dx - 23) + 'px'; joyNub.style.top = (joy.oy + dy - 23) + 'px';
+  });
+  function joyEnd(e) {
+    if (!joy.on || e.pointerId !== joy.id) return;
+    var wasTap = joy.moved < 9 && performance.now() - joy.t0 < 350;
+    joy.on = false; joy.dx = 0; joy.dy = 0;
+    joyBase.style.display = 'none'; joyNub.style.display = 'none';
+    if (wasTap && started && !uiOpen()) {
+      var cam = camXY();
+      PLACES.forEach(function (p) {
+        if (Math.abs(p.x - cam.x - joy.tapX) < 48 && Math.abs(p.y - cam.y - joy.tapY) < 48 && Math.hypot(wx - p.x, wy - p.y) < 95) openPlace(p);
+      });
+    }
   }
-  bindHold('leftBtn', function (v) { holdL = v; });
-  bindHold('rightBtn', function (v) { holdR = v; });
-  bindHold('upBtn', function (v) { holdU = v; });
-  bindHold('downBtn', function (v) { holdD = v; });
+  window.addEventListener('pointerup', joyEnd);
+  window.addEventListener('pointercancel', joyEnd);
   var keys = {};
   window.addEventListener('keydown', function (e) { keys[e.key] = true; });
   window.addEventListener('keyup', function (e) { keys[e.key] = false; });
-  cv.addEventListener('pointerdown', function (e) {
-    if (uiOpen() || wy >= 0.55) return;
-    var r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) * (W / r.width);
-    var cam = camX();
-    herePlaces().forEach(function (sp) {
-      if (Math.abs(sp.x - cam - sx) < 46 && Math.abs(wx - sp.x) < 90) openPlace(sp);
-    });
-  });
 
   // ----- buttons -----
   var motionBtn = document.getElementById('motionBtn'), soundBtn = document.getElementById('soundBtn');
@@ -666,7 +666,8 @@
   document.getElementById('startBtn').addEventListener('click', function () {
     document.getElementById('startScr').style.display = 'none';
     started = true; audioInit(); if (AC && AC.resume) AC.resume();
-    if (LIFE.day === 1 && LIFE.clock === 420 && LIFE.yen === 3000) toast('Day 1. The café is hiring, if you can call it that.');
+    updateHUD();
+    if (LIFE.day === 1 && LIFE.clock === 420 && LIFE.yen === 3000) toast('Day 1. Home is the amber door, southwest. The café is hiring.');
   });
 
   // ----- main loop -----
@@ -674,37 +675,33 @@
   function loop(ts) {
     requestAnimationFrame(loop);
     var dt = Math.min(3, last ? (ts - last) / 16.7 : 1); last = ts;
-    if (fade > 0) {
-      fade += dt * 0.09;
-      if (fade >= 1 && fadeSwap) { var f = fadeSwap; fadeSwap = null; f(); }
-      if (fade >= 2) fade = 0;
-      draw(ts);
-      return;
-    }
-    var s = SC();
-    var dir = (holdR || keys['ArrowRight'] || keys['d'] ? 1 : 0) - (holdL || keys['ArrowLeft'] || keys['a'] ? 1 : 0);
-    var vdir = (holdD || keys['ArrowDown'] || keys['s'] ? 1 : 0) - (holdU || keys['ArrowUp'] || keys['w'] ? 1 : 0);
-    moving = ((dir !== 0 || vdir !== 0) && started && !uiOpen()) ? 1 : 0;
+    var vx = 0, vy = 0;
+    if (joy.on && (Math.abs(joy.dx) > 0.22 || Math.abs(joy.dy) > 0.22)) { vx = joy.dx; vy = joy.dy; }
+    if (keys['ArrowRight'] || keys['d']) vx += 1;
+    if (keys['ArrowLeft'] || keys['a']) vx -= 1;
+    if (keys['ArrowDown'] || keys['s']) vy += 1;
+    if (keys['ArrowUp'] || keys['w']) vy -= 1;
+    var m = Math.hypot(vx, vy);
+    moving = (m > 0.01 && started && !uiOpen()) ? 1 : 0;
     if (moving) {
-      if (dir !== 0) {
-        facing = dir;
-        var step = 2.3 * dt * dir;
-        wx += step;
-        var dm = Math.abs(step) / 46;
-        distM += dm; totalM += dm;
-        LIFE.walkAcc += dm;
-        while (LIFE.walkAcc >= 400) { LIFE.walkAcc -= 400; LIFE.fitness++; toast('Fitness +1 — the district itself is training you', 3200); saveLife(); }
-        if ((loop.acc = (loop.acc || 0) + dm) > 4) { loop.acc = 0; save('ts-total', String(totalM)); saveLife(); updateHUD(); }
-        if (wx <= 22 && s.exitL) { goScreen(s.exitL, 'right'); }
-        else if (wx >= s.world - 22 && s.exitR) { goScreen(s.exitR, 'left'); }
-        wx = Math.max(18, Math.min(s.world - 18, wx));
-      }
-      if (vdir !== 0) wy = Math.max(0, Math.min(1, wy + vdir * 0.016 * dt));
-      phase += 0.16 * dt;
+      var sp = 2.65 * dt, nx = vx / (m > 1 ? m : 1), ny = vy / (m > 1 ? m : 1);
+      if (m < 1) { nx = vx; ny = vy; }
+      moveAng = Math.atan2(ny, nx);
+      var stepX = nx * sp, stepY = ny * sp;
+      if (!collides(wx + stepX, wy)) wx += stepX;
+      if (!collides(wx, wy + stepY)) wy += stepY;
+      wx = Math.max(16, Math.min(WORLD_W - 16, wx));
+      wy = Math.max(16, Math.min(WORLD_H - 12, wy));
+      var dm = Math.hypot(stepX, stepY) / 46;
+      distM += dm; totalM += dm;
+      LIFE.walkAcc += dm;
+      while (LIFE.walkAcc >= 400) { LIFE.walkAcc -= 400; LIFE.fitness++; toast('Fitness +1 — the district itself is training you', 3200); saveLife(); }
+      if ((loop.acc = (loop.acc || 0) + dm) > 4) { loop.acc = 0; save('ts-total', String(totalM)); saveLife(); updateHUD(); }
+      phase += 0.22 * dt;
     }
     drops.forEach(function (dr) {
       dr.y += dr.v * dt / 60 * 3.4; dr.x -= 0.7 * dt;
-      if (dr.y > H) { dr.y = -14; dr.x = Math.random() * (W + 120); if (Math.random() < 0.5) ripples.push({ x: dr.x, y: SC().gBot + 8 + Math.random() * 34, r: 2 }); }
+      if (dr.y > H) { dr.y = -14; dr.x = Math.random() * (W + 120); if (Math.random() < 0.5) ripples.push({ x: Math.random() * W, y: Math.random() * H, r: 2 }); }
     });
     draw(ts);
   }
